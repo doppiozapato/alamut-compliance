@@ -6,6 +6,7 @@ import { supabase, supabaseEnabled } from "./supabase";
 import {
   SEED_USERS,
   SEED_CHAPTERS,
+  SEED_SECTIONS,
   SEED_OBLIGATIONS,
   SEED_ATTESTATIONS,
   SEED_TEMPLATES,
@@ -14,6 +15,7 @@ import {
 import type {
   TeamMember,
   ManualChapter,
+  ManualSection,
   ComplianceObligation,
   Attestation,
   AttestationTemplate,
@@ -22,6 +24,7 @@ import type {
 // In-memory mirrors used when Supabase is unavailable.
 const memUsers: SeedUser[] = [...SEED_USERS];
 const memChapters: ManualChapter[] = [...SEED_CHAPTERS];
+const memSections: ManualSection[] = [...SEED_SECTIONS];
 const memObligations: ComplianceObligation[] = [...SEED_OBLIGATIONS];
 const memAttestations: Attestation[] = [...SEED_ATTESTATIONS];
 const memTemplates: AttestationTemplate[] = [...SEED_TEMPLATES];
@@ -65,7 +68,11 @@ export async function listChapters(): Promise<ManualChapter[]> {
       .order("order_index");
     return (data as ManualChapter[]) ?? [];
   }
-  return [...memChapters].sort((a, b) => a.order_index - b.order_index);
+  // Strip heavy `content` from the list view — clients fetch one chapter at a
+  // time via getChapter(slug) when they need full text.
+  return [...memChapters]
+    .sort((a, b) => a.order_index - b.order_index)
+    .map((c) => ({ ...c, content: "" }));
 }
 
 export async function getChapter(slug: string): Promise<ManualChapter | null> {
@@ -75,9 +82,29 @@ export async function getChapter(slug: string): Promise<ManualChapter | null> {
       .select("*")
       .eq("slug", slug)
       .maybeSingle();
-    return (data as ManualChapter) ?? null;
+    if (!data) return null;
+    const chapter = data as ManualChapter;
+    const { data: secs } = await supabase
+      .from("manual_sections")
+      .select("*")
+      .eq("chapter_id", chapter.id)
+      .order("order_index");
+    chapter.sections = (secs as ManualSection[]) ?? [];
+    return chapter;
   }
-  return memChapters.find((c) => c.slug === slug) ?? null;
+  const chapter = memChapters.find((c) => c.slug === slug);
+  if (!chapter) return null;
+  return {
+    ...chapter,
+    sections: memSections
+      .filter((s) => s.chapter_id === chapter.id)
+      .sort((a, b) => a.order_index - b.order_index),
+  };
+}
+
+export async function listSectionsForChapter(slug: string): Promise<ManualSection[]> {
+  const chapter = await getChapter(slug);
+  return chapter?.sections ?? [];
 }
 
 export async function upsertChapter(c: Partial<ManualChapter> & { slug: string; title: string; content: string; number: string }): Promise<ManualChapter> {

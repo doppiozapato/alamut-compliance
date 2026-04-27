@@ -31,6 +31,32 @@ export interface ManualChapter {
   fca_refs: string[]; // e.g. ["SYSC", "COBS 2.1"]
   tags: string[];
   updated_at: string;
+  // Provenance from PDF imports — null on manually authored chapters.
+  kind?: "chapter" | "appendix";
+  start_page?: number | null;
+  end_page?: number | null;
+  source_pdf?: string | null;
+  sections?: ManualSection[];
+}
+
+export interface ManualSection {
+  id?: number;
+  chapter_id?: number;
+  chapter_slug?: string;
+  number: string; // e.g. "1.1", "16.10"
+  title: string;
+  slug: string;
+  page: number | null;
+  content: string;
+  order_index: number;
+}
+
+export interface ManualSourcePdf {
+  source_file: string;
+  title: string;
+  version: string;
+  page_count: number;
+  generated_at: string; // ISO timestamp of last import
 }
 
 export interface FcaModule {

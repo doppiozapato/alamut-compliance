@@ -5,6 +5,7 @@ import {
   listChapters,
   getChapter,
   upsertChapter,
+  listSectionsForChapter,
   listObligations,
   updateObligation,
   listAttestations,
@@ -13,6 +14,7 @@ import {
 } from "./store";
 import { supabaseEnabled } from "./supabase";
 import { FCA_MODULES, FCA_CATEGORIES } from "./fcaHandbook";
+import { SEED_MANUAL_SOURCE } from "./seedData";
 import type { Role } from "../shared/schema";
 
 declare module "express-session" {
@@ -144,6 +146,16 @@ export async function registerRoutes(app: Express) {
     const c = await getChapter(String(req.params.slug));
     if (!c) return res.status(404).json({ error: "Chapter not found" });
     res.json(c);
+  });
+
+  app.get("/api/manual/chapters/:slug/sections", requireAuth, async (req, res) => {
+    const sections = await listSectionsForChapter(String(req.params.slug));
+    if (!sections) return res.status(404).json({ error: "Chapter not found" });
+    res.json(sections);
+  });
+
+  app.get("/api/manual/source", requireAuth, (_req, res) => {
+    res.json(SEED_MANUAL_SOURCE);
   });
 
   app.post("/api/manual/chapters", requireRole("admin", "compliance"), async (req, res) => {

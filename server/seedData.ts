@@ -9,10 +9,12 @@
 import type {
   TeamMember,
   ManualChapter,
+  ManualSection,
   ComplianceObligation,
   Attestation,
   AttestationTemplate,
 } from "../shared/schema";
+import { buildSeedChaptersFromPdf, MANUAL_SOURCE } from "./manualSeed";
 
 // ─── Team members / credentials ──────────────────────────────────────────────
 //
@@ -142,12 +144,19 @@ export const SEED_USERS: SeedUser[] = [
 
 // ─── Manual chapters ─────────────────────────────────────────────────────────
 //
-// Placeholder structure for the Firm Compliance Manual. The real manual will
-// be ingested via the import script (see /script/importManual.ts) — these
-// chapters mirror the typical structure of a UK-authorised investment firm
-// compliance manual so the dashboard ships with usable scaffolding.
+// The real Alamut Compliance Manual (September 2025) is parsed from the PDF
+// by `script/parseManualPdf.py` and persisted to `script/manualData.json`.
+// We load that data at boot so the dashboard ships with the firm's actual
+// chapters and sections. If the JSON is missing (e.g. fresh checkout without
+// the parsed file), we fall back to the legacy scaffolding below — that path
+// is not expected in production.
 
-export const SEED_CHAPTERS: ManualChapter[] = [
+const parsed = buildSeedChaptersFromPdf();
+
+export const SEED_MANUAL_SOURCE = MANUAL_SOURCE;
+export const SEED_SECTIONS: ManualSection[] = parsed.sections;
+
+const FALLBACK_CHAPTERS: ManualChapter[] = [
   {
     id: 1,
     number: "1",
@@ -353,6 +362,12 @@ export const SEED_CHAPTERS: ManualChapter[] = [
     updated_at: "2026-01-01T00:00:00Z",
   },
 ];
+
+// Prefer the parsed Alamut Compliance Manual when available; fall back to the
+// scaffolding above only on a fresh checkout where the JSON has not yet been
+// generated.
+export const SEED_CHAPTERS: ManualChapter[] =
+  parsed.chapters.length > 0 ? parsed.chapters : FALLBACK_CHAPTERS;
 
 // ─── Compliance calendar (firm + fund obligations) ───────────────────────────
 

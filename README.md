@@ -2,7 +2,10 @@
 
 Internal dashboard for Alamut covering:
 
-- **Firm Compliance Manual** — chapter-based viewer with fast search and FCA cross-references.
+- **Firm Compliance Manual** — chapter-and-section viewer for the Alamut
+  Compliance Manual (September 2025), parsed from the source PDF into 43
+  chapters / appendices and ~300 sections, with fast search and FCA
+  cross-references.
 - **FCA Handbook reference** — searchable index of all Handbook modules linking back to [handbook.fca.org.uk](https://handbook.fca.org.uk/handbook).
 - **Compliance Calendar** — firm and fund regulatory reporting obligations with status tracking.
 - **Attestations** — per-team-member sign-offs (Code of Conduct, PA Dealing, AML, etc).
@@ -85,9 +88,10 @@ To activate or change the second admin:
      the expert network app. **Do not** mix tables — use a different schema or
      a new project for compliance.
    - `Self Source` (`ozdxxwpbbbhvhlvusoeo`) — empty; suitable for use here.
-2. In the Supabase SQL Editor, run:
+2. In the Supabase SQL Editor, run, in order:
    ```
    supabase/migrations/0001_init.sql
+   supabase/migrations/0002_manual_sections.sql
    supabase/seed.sql
    ```
 3. (Recommended) Switch the seeded plaintext passwords to bcrypt hashes and
@@ -98,28 +102,60 @@ To activate or change the second admin:
 
 ### Importing the Firm Compliance Manual
 
-The dashboard ships with a placeholder chapter structure. To replace it with
-your real manual:
+The repo ships with the **Alamut Compliance Manual (September 2025)** already
+parsed and committed at `script/manualData.json` (43 chapters/appendices,
+~300 sections). The dashboard loads this JSON at boot for both dev and
+production builds, so a fresh checkout serves the real manual immediately.
 
-1. Convert the manual to one markdown file per chapter, named `NN-slug.md`
-   (e.g. `02-governance.md`). Optional front matter is supported:
-   ```
-   ---
-   summary: SMCR governance map
-   owner: Compliance Officer
-   version: v1.2
-   effective_date: 2026-01-01
-   fca_refs: SYSC, COCON, APER
-   tags: smcr, governance
-   ---
-   # 2. Governance
-   ...
-   ```
-2. Run:
-   ```bash
-   SUPABASE_SERVICE_ROLE_KEY=... npx tsx script/importManual.ts ./manual/
-   ```
-3. The dashboard will pick up the new chapters on the next page load.
+#### Refreshing the parsed JSON from a new PDF
+
+When a new revision of the manual is issued, regenerate the JSON and
+optionally push it to Supabase:
+
+```bash
+# 1. Regenerate the structured JSON from a PDF.
+#    Requires `pdftotext` (poppler-utils) on PATH; no Python dependencies.
+python3 script/parseManualPdf.py \
+    /path/to/Alamut-Compliance-Manual_<rev>.pdf \
+    script/manualData.json
+
+# 2. Rebuild — the build step copies the JSON next to the bundle.
+npm run build
+
+# 3. (Production) Push chapters + sections to Supabase.
+SUPABASE_SERVICE_ROLE_KEY=... npx tsx script/importManual.ts
+# Pass an explicit JSON path if you parsed elsewhere:
+SUPABASE_SERVICE_ROLE_KEY=... npx tsx script/importManual.ts ./other.json
+```
+
+The parser scans the contents pages for chapter and section page anchors,
+slices the body by chapter, strips the recurring "Alamut Investment
+Management LLP" / "PRIVATE & CONFIDENTIAL" page chrome, and emits one entry
+per numbered section (`1.1`, `16.10`, …) plus an entry per appendix
+(`Appendix A`, …). Heuristics tag each chapter with FCA Handbook module
+references (PRIN, SYSC, COBS, MAR, …) for the chapter sidebar.
+
+#### Schema additions
+
+`supabase/migrations/0002_manual_sections.sql` adds:
+
+| Object                    | Purpose                                            |
+| ------------------------- | -------------------------------------------------- |
+| `manual_chapters.kind`    | `chapter` or `appendix`                            |
+| `manual_chapters.start_page` / `end_page` | Page anchors in the source PDF      |
+| `manual_chapters.source_pdf` | Filename of the PDF the chapter was imported from |
+| `manual_sections` table   | One row per numbered section, FK → `manual_chapters` |
+
+#### Legacy markdown-folder mode
+
+The original markdown-folder importer is still supported for ad-hoc updates:
+
+```bash
+SUPABASE_SERVICE_ROLE_KEY=... npx tsx script/importManual.ts ./manual/
+```
+
+When `script/importManual.ts` is given a directory it falls through to
+that path; otherwise it consumes the parsed JSON.
 
 ## Railway deployment
 
@@ -288,7 +324,9 @@ alamut-compliance/
 │   └── seed.sql
 ├── script/
 │   ├── build.ts               # esbuild + vite build
-│   └── importManual.ts        # markdown → manual_chapters
+│   ├── parseManualPdf.py      # PDF → script/manualData.json (chapters + sections)
+│   ├── manualData.json        # parsed Alamut Compliance Manual (committed)
+│   └── importManual.ts        # JSON / markdown → manual_chapters + manual_sections
 ├── railway.json
 ├── tailwind.config.ts
 ├── tsconfig.json

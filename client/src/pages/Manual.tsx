@@ -1,12 +1,15 @@
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { BookOpen, Search } from "lucide-react";
-import type { ManualChapter } from "@shared/schema";
+import { BookOpen, Search, FileText } from "lucide-react";
+import type { ManualChapter, ManualSourcePdf } from "@shared/schema";
 
 export default function Manual() {
   const { data: chapters = [], isLoading } = useQuery<ManualChapter[]>({
     queryKey: ["/api/manual/chapters"],
+  });
+  const { data: source } = useQuery<ManualSourcePdf>({
+    queryKey: ["/api/manual/source"],
   });
   const [q, setQ] = useState("");
 
@@ -23,80 +26,113 @@ export default function Manual() {
     );
   }, [q, chapters]);
 
+  const main = filtered.filter((c) => c.kind !== "appendix");
+  const appendices = filtered.filter((c) => c.kind === "appendix");
+
   return (
     <div className="px-6 py-6 max-w-5xl mx-auto">
-      <div className="flex items-center justify-between mb-5">
+      <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
           <BookOpen className="w-4 h-4" />
-          <h1 className="text-base font-semibold">Firm Compliance Manual</h1>
+          <h1 className="text-base font-semibold">
+            {source?.title ?? "Firm Compliance Manual"}
+          </h1>
         </div>
         <div className="relative w-72">
           <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search chapters, topics, FCA refs…"
+            placeholder="Search chapters, sections, FCA refs…"
             className="w-full pl-8 pr-3 py-1.5 text-xs rounded-md border border-border bg-card focus:outline-none focus:ring-1 focus:ring-ring"
           />
         </div>
       </div>
+      {source && (
+        <p className="text-[11px] text-muted-foreground mb-5 flex items-center gap-1.5">
+          <FileText className="w-3 h-3" /> {source.version} · {source.page_count} pages ·
+          source: <span className="font-mono">{source.source_file}</span>
+        </p>
+      )}
 
       {isLoading ? (
         <p className="text-xs text-muted-foreground">Loading…</p>
       ) : filtered.length === 0 ? (
         <p className="text-xs text-muted-foreground py-8 text-center">
-          No chapters match. Use the import script (<span className="font-mono">script/importManual.ts</span>) to ingest the firm manual.
+          No chapters match. Use the import script (
+          <span className="font-mono">script/parseManualPdf.py</span> →{" "}
+          <span className="font-mono">script/importManual.ts</span>) to ingest the firm manual.
         </p>
       ) : (
-        <ol className="space-y-2">
-          {filtered.map((c) => (
-            <li key={c.id}>
-              <Link href={`/manual/${c.slug}`}>
-                <a className="block bg-card border border-border rounded-lg px-4 py-3 hover:border-primary/40 transition-colors">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                        Chapter {c.number} {c.version ? `· ${c.version}` : ""}
-                      </p>
-                      <p className="text-sm font-medium mt-0.5">{c.title}</p>
-                      {c.summary && (
-                        <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                          {c.summary}
-                        </p>
-                      )}
-                    </div>
-                    {c.owner && (
-                      <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0">
-                        Owner: {c.owner}
-                      </span>
-                    )}
-                  </div>
-                  {(c.fca_refs.length > 0 || c.tags.length > 0) && (
-                    <div className="flex flex-wrap gap-1 mt-2">
-                      {c.fca_refs.map((r) => (
-                        <span
-                          key={r}
-                          className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20"
-                        >
-                          {r}
-                        </span>
-                      ))}
-                      {c.tags.map((t) => (
-                        <span
-                          key={t}
-                          className="text-[9px] px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground"
-                        >
-                          {t}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </a>
-              </Link>
-            </li>
-          ))}
-        </ol>
+        <>
+          <ChapterList items={main} heading="Chapters" />
+          {appendices.length > 0 && (
+            <div className="mt-8">
+              <ChapterList items={appendices} heading="Appendices" />
+            </div>
+          )}
+        </>
       )}
     </div>
+  );
+}
+
+function ChapterList({ items, heading }: { items: ManualChapter[]; heading: string }) {
+  return (
+    <>
+      <h2 className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2">
+        {heading} <span className="text-muted-foreground/70">· {items.length}</span>
+      </h2>
+      <ol className="space-y-2">
+        {items.map((c) => (
+          <li key={c.id}>
+            <Link href={`/manual/${c.slug}`}>
+              <a className="block bg-card border border-border rounded-lg px-4 py-3 hover:border-primary/40 transition-colors">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                      {c.kind === "appendix" ? "Appendix" : "Chapter"} {c.number}
+                      {c.start_page ? ` · pp. ${c.start_page}-${c.end_page}` : ""}
+                      {c.version ? ` · ${c.version}` : ""}
+                    </p>
+                    <p className="text-sm font-medium mt-0.5">{c.title}</p>
+                    {c.summary && (
+                      <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                        {c.summary}
+                      </p>
+                    )}
+                  </div>
+                  {c.owner && (
+                    <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0">
+                      Owner: {c.owner}
+                    </span>
+                  )}
+                </div>
+                {(c.fca_refs.length > 0 || c.tags.length > 0) && (
+                  <div className="flex flex-wrap gap-1 mt-2">
+                    {c.fca_refs.map((r) => (
+                      <span
+                        key={r}
+                        className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20"
+                      >
+                        {r}
+                      </span>
+                    ))}
+                    {c.tags.map((t) => (
+                      <span
+                        key={t}
+                        className="text-[9px] px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground"
+                      >
+                        {t}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </a>
+            </Link>
+          </li>
+        ))}
+      </ol>
+    </>
   );
 }
