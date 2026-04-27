@@ -52,9 +52,9 @@ export default function Login({ onAuth }: Props) {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-background">
+    <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: "#ffffff" }}>
       <div className="w-full max-w-md">
-        <div className="mb-10 flex flex-col items-center gap-2">
+        <div className="mb-10 flex flex-col items-center gap-3">
           <AlamutLogo />
         </div>
 

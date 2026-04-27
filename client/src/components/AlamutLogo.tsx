@@ -3,27 +3,28 @@ import { cn } from "@/lib/utils";
 interface Props {
   className?: string;
   small?: boolean;
+  variant?: "auto" | "dark" | "light";
 }
 
-// Lightweight wordmark — used both at login (centered, larger) and in the
-// sidebar (compact). No image dependency so the build remains self-contained.
-export default function AlamutLogo({ className, small = false }: Props) {
+// Image-based wordmark mirroring the Expert Network treatment.
+// - `small` is the compact sidebar variant.
+// - The full-color JPG is used on white (login). The light PNG is used in
+//   the dark sidebar so it stays legible regardless of theme.
+export default function AlamutLogo({ className, small = false, variant = "auto" }: Props) {
+  const src =
+    variant === "dark"
+      ? "/alamut-logo.jpg"
+      : variant === "light"
+        ? "/alamut-logo-light.png"
+        : small
+          ? "/alamut-logo-light.png"
+          : "/alamut-logo.jpg";
+
   return (
-    <div className={cn("flex flex-col items-center select-none", className)}>
-      <div
-        className={cn(
-          "font-semibold tracking-[0.2em]",
-          small ? "text-base" : "text-3xl",
-        )}
-        style={{ fontFamily: "'Inter', sans-serif" }}
-      >
-        ALAMUT
-      </div>
-      {!small && (
-        <div className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mt-1">
-          Compliance
-        </div>
-      )}
-    </div>
+    <img
+      src={src}
+      alt="Alamut"
+      className={cn(small ? "h-8 w-auto" : "h-28 w-auto", "select-none", className)}
+    />
   );
 }
