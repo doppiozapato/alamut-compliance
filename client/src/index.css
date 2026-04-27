@@ -1,0 +1,112 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Slate/Navy palette — precise, fintech, institutional */
+    --background: 220 20% 97%;
+    --foreground: 222 30% 12%;
+
+    --card: 220 18% 99%;
+    --card-foreground: 222 30% 12%;
+
+    --popover: 220 18% 99%;
+    --popover-foreground: 222 30% 12%;
+
+    --primary: 215 65% 32%;
+    --primary-foreground: 0 0% 98%;
+
+    --secondary: 218 20% 92%;
+    --secondary-foreground: 222 25% 20%;
+
+    --muted: 218 18% 94%;
+    --muted-foreground: 220 12% 48%;
+
+    --accent: 215 60% 28%;
+    --accent-foreground: 0 0% 98%;
+
+    --destructive: 0 72% 45%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 218 16% 88%;
+    --input: 218 16% 88%;
+    --ring: 215 65% 32%;
+
+    --radius: 0.4rem;
+
+    --sidebar: 222 28% 13%;
+    --sidebar-background: 222 28% 13%;
+    --sidebar-foreground: 218 20% 78%;
+    --sidebar-primary: 215 65% 55%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 222 28% 20%;
+    --sidebar-accent-foreground: 218 20% 88%;
+    --sidebar-border: 222 20% 20%;
+    --sidebar-ring: 215 65% 55%;
+  }
+
+  .dark {
+    --background: 222 28% 9%;
+    --foreground: 218 20% 88%;
+
+    --card: 222 26% 12%;
+    --card-foreground: 218 20% 88%;
+
+    --popover: 222 26% 12%;
+    --popover-foreground: 218 20% 88%;
+
+    --primary: 215 60% 55%;
+    --primary-foreground: 222 28% 9%;
+
+    --secondary: 222 22% 18%;
+    --secondary-foreground: 218 20% 78%;
+
+    --muted: 222 22% 16%;
+    --muted-foreground: 218 12% 52%;
+
+    --accent: 215 55% 48%;
+    --accent-foreground: 0 0% 98%;
+
+    --destructive: 0 62% 52%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 222 20% 20%;
+    --input: 222 20% 20%;
+    --ring: 215 60% 55%;
+
+    --sidebar: 222 30% 7%;
+    --sidebar-background: 222 30% 7%;
+    --sidebar-foreground: 218 16% 68%;
+    --sidebar-primary: 215 60% 55%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 222 28% 13%;
+    --sidebar-accent-foreground: 218 18% 82%;
+    --sidebar-border: 222 22% 14%;
+    --sidebar-ring: 215 60% 55%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Inter', 'Helvetica Neue', sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+@layer utilities {
+  .hover-elevate {
+    transition: box-shadow 180ms cubic-bezier(0.16, 1, 0.3, 1), transform 180ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .hover-elevate:hover {
+    box-shadow: 0 4px 16px hsl(var(--foreground) / 0.08);
+    transform: translateY(-1px);
+  }
+  .active-elevate-2:active {
+    transform: translateY(0px) scale(0.98);
+  }
+}
