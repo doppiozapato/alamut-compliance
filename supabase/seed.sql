@@ -9,12 +9,11 @@
 
 -- ─── Team members ────────────────────────────────────────────────────────────
 -- Two senior personnel hold admin rights:
---   • tom@alamut-im.com  — primary superuser/admin
---   • <second-admin>     — placeholder; replace with the real email before
---                          running this seed in production.
+--   • tom@alamut-im.com    — primary superuser/admin
+--   • alice@alamut-im.com  — second admin
 insert into public.team_members (id, email, full_name, role, is_active) values
   (1, 'tom@alamut-im.com',          'Tom (Superuser)',    'admin',      true),
-  (2, 'second-admin@alamut-im.com', 'Second Admin',       'admin',      true),
+  (2, 'alice@alamut-im.com',        'Alice (Admin)',      'admin',      true),
   (3, 'compliance@alamut-im.com',   'Compliance Officer', 'compliance', true),
   (4, 'operations@alamut-im.com',   'Operations Lead',    'operations', true),
   (5, 'finance@alamut-im.com',      'Finance Manager',    'finance',    true),

@@ -17,9 +17,10 @@ import type {
 // ─── Team members / credentials ──────────────────────────────────────────────
 //
 // Two senior personnel hold admin rights:
-//   • Primary superuser:  tom@alamut-im.com  (always admin)
-//   • Second admin:       configured via SECOND_ADMIN_EMAIL (or the
-//                         comma-separated ADMIN_EMAILS list)
+//   • Primary superuser:  tom@alamut-im.com    (always admin)
+//   • Second admin:       alice@alamut-im.com  (default; overridable via
+//                         SECOND_ADMIN_EMAIL or the comma-separated
+//                         ADMIN_EMAILS list)
 //
 // Dev-only passwords are read from env vars (e.g. ADMIN_DEV_PASSWORD). When
 // running without Supabase and without env passwords set, the seed users
@@ -31,15 +32,20 @@ export interface SeedUser extends TeamMember {
 }
 
 const PRIMARY_ADMIN_EMAIL = "tom@alamut-im.com";
+const DEFAULT_SECOND_ADMIN_EMAIL = "alice@alamut-im.com";
 
 function parseAdminEmails(): string[] {
   const list = (process.env.ADMIN_EMAILS ?? "")
     .split(",")
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean);
-  const second = (process.env.SECOND_ADMIN_EMAIL ?? "").trim().toLowerCase();
+  const secondEnv = (process.env.SECOND_ADMIN_EMAIL ?? "").trim().toLowerCase();
   const all = new Set<string>([PRIMARY_ADMIN_EMAIL.toLowerCase(), ...list]);
-  if (second) all.add(second);
+  if (secondEnv) all.add(secondEnv);
+  // If no env override was supplied, fall back to the named second admin.
+  if (!secondEnv && list.length === 0) {
+    all.add(DEFAULT_SECOND_ADMIN_EMAIL.toLowerCase());
+  }
   return Array.from(all);
 }
 
@@ -49,6 +55,8 @@ export function isAdminEmail(email: string): boolean {
 
 const ADMIN_EMAILS = parseAdminEmails();
 const SECOND_ADMIN_EMAIL = ADMIN_EMAILS.find((e) => e !== PRIMARY_ADMIN_EMAIL.toLowerCase()) ?? null;
+const SECOND_ADMIN_FULL_NAME =
+  SECOND_ADMIN_EMAIL === DEFAULT_SECOND_ADMIN_EMAIL ? "Alice (Admin)" : "Second Admin";
 
 const ADMIN_DEV_PASSWORD = process.env.ADMIN_DEV_PASSWORD || null;
 const TEAM_DEV_PASSWORD = process.env.TEAM_DEV_PASSWORD || null;
@@ -68,7 +76,7 @@ export const SEED_USERS: SeedUser[] = [
         {
           id: 2,
           email: SECOND_ADMIN_EMAIL,
-          full_name: "Second Admin",
+          full_name: SECOND_ADMIN_FULL_NAME,
           role: "admin" as const,
           is_active: true,
           created_at: "2026-01-01T00:00:00Z",

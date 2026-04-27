@@ -43,18 +43,19 @@ the only place this is configured:
 | Slot                   | Email                           | Configured via                          |
 | ---------------------- | ------------------------------- | --------------------------------------- |
 | Primary superuser/admin| `tom@alamut-im.com`             | hard-wired in seed + Supabase           |
-| Second admin           | _(per deployment)_              | `SECOND_ADMIN_EMAIL` env var (or `ADMIN_EMAILS`) |
+| Second admin           | `alice@alamut-im.com`           | seeded by default; overridable via `SECOND_ADMIN_EMAIL` (or `ADMIN_EMAILS`) |
 
-To activate the second admin:
+To activate or change the second admin:
 
-1. **Supabase deployments:** insert a row in `team_members` for the second
-   admin email with `role='admin'`, then bcrypt-hash a password into
-   `password_hash`. The `supabase/seed.sql` file contains a placeholder
-   row (`second-admin@alamut-im.com`) — update that email before running
-   the seed, or insert the real row manually.
-2. **In-memory fallback (no Supabase):** set `SECOND_ADMIN_EMAIL` (and
-   `ADMIN_DEV_PASSWORD`) in the environment. The seed will create the
-   second admin user on boot.
+1. **Supabase deployments:** the `supabase/seed.sql` file inserts
+   `alice@alamut-im.com` as the second admin. Bcrypt-hash a password into
+   `team_members.password_hash` for that row. To use a different email,
+   edit the seed row before running it, or insert the desired row manually
+   with `role='admin'`.
+2. **In-memory fallback (no Supabase):** the seed creates Alice as the
+   second admin automatically. Set `ADMIN_DEV_PASSWORD` to enable her
+   login. To use a different email, set `SECOND_ADMIN_EMAIL` (or
+   `ADMIN_EMAILS`) in the environment.
 3. The login screen does not display credential hints, presets, or demo
    passwords. Provision real bcrypt-hashed passwords in
    `team_members.password_hash` for production.
@@ -171,7 +172,7 @@ serves both the bundled API (`dist/index.cjs`) and the built client
 | `NODE_ENV`                  | ✅       | Set to `production`                                                         |
 | `PORT`                      | auto     | Provided by Railway; falls back to `8080` locally                           |
 | `ADMIN_PASSPHRASE`          | optional | Legacy admin-override; omit if all logins use `team_members`                |
-| `SECOND_ADMIN_EMAIL`        | optional | Email of the second admin user. `tom@alamut-im.com` is always the primary. |
+| `SECOND_ADMIN_EMAIL`        | optional | Override the second admin email. Defaults to `alice@alamut-im.com`; `tom@alamut-im.com` is always the primary. |
 | `ADMIN_EMAILS`              | optional | Alternative to `SECOND_ADMIN_EMAIL`: comma-separated list of admin emails. |
 | `ADMIN_DEV_PASSWORD`        | dev only | Plaintext password for the seed admin accounts when Supabase isn't wired. **Never set in production.** |
 | `TEAM_DEV_PASSWORD`         | dev only | Plaintext password for the seed non-admin accounts. **Never set in production.** |
