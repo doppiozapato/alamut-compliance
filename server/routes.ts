@@ -1,4 +1,5 @@
 import type { Express, Request, Response, NextFunction } from "express";
+import bcrypt from "bcryptjs";
 import {
   findUserByEmail,
   listTeamMembers,
@@ -64,32 +65,53 @@ export async function registerRoutes(app: Express) {
       return res.status(401).json({ error: "Invalid credentials" });
     }
 
-    // Production deployments use bcrypt-hashed passwords stored in Supabase
-    // `team_members.password_hash`. The dev fallback compares against an
-    // env-provided plaintext password (ADMIN_DEV_PASSWORD / TEAM_DEV_PASSWORD)
-    // — never a hard-coded value. If neither path is configured, login fails.
+    // Login resolution order:
+    //   1. If `team_members.password_hash` is set, verify against it. A
+    //      bcrypt-shaped hash ($2a$/$2b$/$2y$) is checked with bcrypt.compare;
+    //      anything else is treated as a legacy/dev plaintext entry and
+    //      compared directly (kept only so existing non-bcrypt rows still
+    //      work — production should use bcrypt).
+    //   2. Otherwise fall back to the role-based env password
+    //      (ADMIN_DEV_PASSWORD for admin/compliance; TEAM_DEV_PASSWORD for
+    //      everyone else). This is what lets the seeded Supabase rows with
+    //      NULL password_hash log in without needing plaintext in the DB.
+    //   3. If neither source is configured, fail with a non-secret diagnostic
+    //      log so Railway operators can see why.
     const hash = (user as any).password_hash as string | null | undefined;
-    const devPassword = (user as any).password as string | null | undefined;
+    const envPassword = (user as any).password as string | null | undefined;
+    const hasHash = !!hash;
+    const hasEnvPassword = !!envPassword;
 
     let ok = false;
-    let path: "hash" | "dev" | "none" = "none";
+    let path: "hash_bcrypt" | "hash_plain" | "env" | "none" = "none";
     if (hash) {
-      // TODO: swap for bcryptjs.compare(password, hash) in production.
-      ok = hash === password;
-      path = "hash";
-    } else if (devPassword) {
-      ok = devPassword === password;
-      path = "dev";
+      if (/^\$2[aby]\$/.test(hash)) {
+        path = "hash_bcrypt";
+        try {
+          ok = await bcrypt.compare(password, hash);
+        } catch (e) {
+          console.warn(`[auth] bcrypt.compare threw for ${email}: ${(e as Error).message}`);
+          ok = false;
+        }
+      } else {
+        path = "hash_plain";
+        ok = hash === password;
+      }
+    } else if (envPassword) {
+      path = "env";
+      ok = envPassword === password;
     }
 
+    console.log(
+      `[auth] login attempt: email=${email} role=${user.role} ` +
+        `supabaseEnabled=${supabaseEnabled} has_hash=${hasHash} has_env_password=${hasEnvPassword} ` +
+        `path=${path} ok=${ok}`,
+    );
+
     if (path === "none") {
-      // Neither a stored hash nor a dev password is configured for this user.
-      // This is the most common cause of a deployment-time "Invalid credentials"
-      // — e.g. Supabase row exists with password_hash=NULL, or the in-memory
-      // seed is active but ADMIN_DEV_PASSWORD / TEAM_DEV_PASSWORD is unset.
       console.warn(
         `[auth] login rejected for ${email}: no credential configured ` +
-          `(supabaseEnabled=${supabaseEnabled}, has_password_hash=${!!hash}, has_dev_password=${!!devPassword}). ` +
+          `(supabaseEnabled=${supabaseEnabled}, has_hash=${hasHash}, has_env_password=${hasEnvPassword}). ` +
           `Set team_members.password_hash in Supabase, or ADMIN_DEV_PASSWORD/TEAM_DEV_PASSWORD in env.`,
       );
     } else if (!ok) {

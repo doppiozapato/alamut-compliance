@@ -39,6 +39,17 @@ function nextId<T extends { id: number }>(rows: T[]): number {
 
 // ─── Users ───────────────────────────────────────────────────────────────────
 
+// Role-based env password fallback. Mirrors the seed-mode behaviour so a
+// Supabase-backed deployment with a NULL `password_hash` can still log in via
+// ADMIN_DEV_PASSWORD / TEAM_DEV_PASSWORD until real bcrypt hashes are
+// provisioned. Read fresh on every call so Railway env changes apply without
+// a process restart.
+function envPasswordForRole(role: string | null | undefined): string | null {
+  const adminPw = process.env.ADMIN_DEV_PASSWORD || null;
+  const teamPw = process.env.TEAM_DEV_PASSWORD || null;
+  return role === "admin" || role === "compliance" ? adminPw : teamPw;
+}
+
 export async function findUserByEmail(email: string): Promise<SeedUser | null> {
   if (supabaseEnabled && supabase) {
     const { data } = await supabase
@@ -46,7 +57,12 @@ export async function findUserByEmail(email: string): Promise<SeedUser | null> {
       .select("*")
       .eq("email", email.toLowerCase())
       .maybeSingle();
-    return (data as SeedUser) ?? null;
+    if (!data) return null;
+    const row = data as SeedUser & { password_hash?: string | null };
+    // Supabase rows do not carry a `password` plaintext column. Provide one
+    // from the role-based env fallback so the auth handler can apply the same
+    // login path as seed mode when `password_hash` is NULL.
+    return { ...row, password: envPasswordForRole(row.role) };
   }
   return memUsers.find((u) => u.email.toLowerCase() === email.toLowerCase()) ?? null;
 }

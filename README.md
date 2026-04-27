@@ -69,6 +69,35 @@ To activate or change the second admin:
 > hashes outside the repo (e.g. `bcrypt.hashSync('newpw', 10)` in Node)
 > and load them directly into Supabase.
 
+#### Login resolution order
+
+The `/api/auth/login` handler resolves credentials in this order:
+
+1. **`team_members.password_hash` is populated** — verified server-side. A
+   bcrypt-shaped hash (`$2a$` / `$2b$` / `$2y$`) is checked with
+   `bcrypt.compare`; any other value is treated as a legacy plaintext column
+   and string-compared (kept only so older rows keep working — use bcrypt for
+   new accounts).
+2. **`password_hash` is NULL** — falls back to the role-based env password:
+   `admin` / `compliance` users use `ADMIN_DEV_PASSWORD`; everyone else uses
+   `TEAM_DEV_PASSWORD`. This is the path Alamut's seeded Supabase rows
+   (`tom@alamut-im.com`, `alice@alamut-im.com`) currently use, since their
+   hash columns are NULL.
+3. **Neither configured** — login fails with `Invalid credentials` and the
+   server logs `has_hash=false has_env_password=false` for the attempt. This
+   is the signal to either set the env vars or populate the bcrypt hash.
+
+Recommended for production: bcrypt-hash a password into
+`team_members.password_hash` for every active user and remove
+`ADMIN_DEV_PASSWORD` / `TEAM_DEV_PASSWORD` from Railway. The handler will
+exclusively follow path 1 once hashes are present.
+
+```js
+// One-off: hash a password from a Node REPL, paste the result into Supabase.
+const bcrypt = require('bcryptjs');
+console.log(bcrypt.hashSync('the-password', 10));
+```
+
 ### Role permissions
 
 | Capability                      | admin | compliance | operations | finance | team |
@@ -255,8 +284,8 @@ serves both the bundled API (`dist/index.cjs`) and the built client
 | `ADMIN_PASSPHRASE`          | optional | Legacy admin-override; omit if all logins use `team_members`                |
 | `SECOND_ADMIN_EMAIL`        | optional | Override the second admin email. Defaults to `alice@alamut-im.com`; `tom@alamut-im.com` is always the primary. |
 | `ADMIN_EMAILS`              | optional | Alternative to `SECOND_ADMIN_EMAIL`: comma-separated list of admin emails. |
-| `ADMIN_DEV_PASSWORD`        | dev only | Plaintext password for the seed admin accounts when Supabase isn't wired. **Never set in production.** |
-| `TEAM_DEV_PASSWORD`         | dev only | Plaintext password for the seed non-admin accounts. **Never set in production.** |
+| `ADMIN_DEV_PASSWORD`        | see notes | Plaintext password for `admin` / `compliance` users. Used in seed mode and as a fallback for Supabase users whose `password_hash` is NULL. Drop it once every admin row has a bcrypt `password_hash`. |
+| `TEAM_DEV_PASSWORD`         | see notes | Plaintext password for `operations` / `finance` / `team` users. Same fallback semantics as `ADMIN_DEV_PASSWORD`. |
 | `SUPABASE_SERVICE_ROLE_KEY` | optional | Only needed by `script/importManual.ts`; do **not** set on the web service  |
 
 > ⚠️ Never commit real values. `.env` is gitignored; use Railway's
