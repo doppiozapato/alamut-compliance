@@ -1,0 +1,17 @@
+# Nixpacks build config for Railway.
+# Pins Node 20 (matches package.json "engines" and .node-version) and runs
+# the project's standard install/build/start scripts.
+
+providers = ["node"]
+
+[phases.setup]
+nixPkgs = ["nodejs_20", "npm-9_x"]
+
+[phases.install]
+cmds = ["npm ci"]
+
+[phases.build]
+cmds = ["npm run build"]
+
+[start]
+cmd = "npm run start"

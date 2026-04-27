@@ -36,6 +36,17 @@ function requireRole(...roles: Role[]) {
 }
 
 export async function registerRoutes(app: Express) {
+  // ─── Health ───────────────────────────────────────────────────────────────
+  // Unauthenticated liveness probe used by Railway's healthcheck.
+  app.get("/api/health", (_req, res) => {
+    res.status(200).json({
+      status: "ok",
+      service: "alamut-compliance",
+      uptime: process.uptime(),
+      timestamp: new Date().toISOString(),
+    });
+  });
+
   // ─── Auth ─────────────────────────────────────────────────────────────────
 
   app.post("/api/auth/login", async (req, res) => {

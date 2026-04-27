@@ -108,34 +108,80 @@ your real manual:
 
 ## Railway deployment
 
-The repo is set up for the same Railway pattern as
-`alamut-expert-network` — push to GitHub and the connected service redeploys.
+The repo ships ready-to-deploy on [railway.com](https://railway.com): pushing
+to `main` redeploys the connected service automatically. Configuration files:
 
-### One-time setup (dashboard)
+| File             | Purpose                                                         |
+| ---------------- | --------------------------------------------------------------- |
+| `railway.json`   | Builder (Nixpacks), build/start commands, healthcheck path      |
+| `nixpacks.toml`  | Pins Node 20, runs `npm ci` → `npm run build` → `npm run start` |
+| `Procfile`       | `web: npm run start` — fallback for buildpack-style hosts       |
 
-1. Sign in to Railway → **New Project** → **Deploy from GitHub repo** → select
-   `doppiozapato/alamut-compliance`.
-2. Set environment variables in **Variables**:
-   - `SUPABASE_URL`
-   - `SUPABASE_ANON_KEY`
-   - `SESSION_SECRET` (any strong random string)
-   - `ADMIN_PASSPHRASE` (legacy override path — not required if you only use
-     team_members credentials)
-   - `PORT` is set automatically by Railway; the server defaults to `8080`.
-3. Railway picks up `railway.json` (NIXPACKS, `npm install && npm run build`,
-   `node dist/index.cjs`).
-4. The production URL will look like
-   `https://alamut-compliance-production.up.railway.app/`.
+The server binds to `process.env.PORT` (Railway-provided) and defaults to
+`8080` for local development. The production start command (`npm run start`)
+serves both the bundled API (`dist/index.cjs`) and the built client
+(`dist/public/`) from a single Express process.
+
+### One-time setup (railway.com UI)
+
+1. Sign in at [railway.com](https://railway.com) → **New Project** →
+   **Deploy from GitHub repo**.
+2. Authorize the GitHub app on the `doppiozapato` org if prompted, then pick
+   **`doppiozapato/alamut-compliance`**.
+3. Railway auto-detects `railway.json` and starts the first build. You can
+   cancel it if you want to set variables before the first run.
+4. Open the service → **Variables** → add the env vars below. The minimum
+   required set is `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SESSION_SECRET`,
+   `NODE_ENV=production`.
+5. Open **Settings → Networking → Generate Domain** to mint a public URL
+   (something like `alamut-compliance-production.up.railway.app`).
+6. Click **Deploy** (top-right) to redeploy with the new variables. Railway
+   will run `npm ci && npm run build`, start the server, and probe
+   `/api/health` until it returns `200` before flipping traffic.
+7. Verify the deploy:
+   ```bash
+   curl https://<your-service>.up.railway.app/api/health
+   # → {"status":"ok","service":"alamut-compliance",...}
+   ```
+   Then open the root URL in a browser — you should see the login screen.
+
+### Required env vars
+
+| Variable                    | Required | Notes                                                                       |
+| --------------------------- | :------: | --------------------------------------------------------------------------- |
+| `SUPABASE_URL`              | ✅       | `https://<project-ref>.supabase.co`                                         |
+| `SUPABASE_ANON_KEY`         | ✅       | Public anon key from Supabase project settings                              |
+| `SESSION_SECRET`            | ✅       | Strong random string; sessions are signed with this. `openssl rand -base64 48` |
+| `NODE_ENV`                  | ✅       | Set to `production`                                                         |
+| `PORT`                      | auto     | Provided by Railway; falls back to `8080` locally                           |
+| `ADMIN_PASSPHRASE`          | optional | Legacy admin-override; omit if all logins use `team_members`                |
+| `SUPABASE_SERVICE_ROLE_KEY` | optional | Only needed by `script/importManual.ts`; do **not** set on the web service  |
+
+> ⚠️ Never commit real values. `.env` is gitignored; use Railway's
+> **Variables** UI or `railway variables set KEY=value` from the CLI.
 
 ### CLI flow (optional)
 
 ```bash
 npm i -g @railway/cli
 railway login
-railway link          # link to project
-railway up            # deploys current branch
-railway open          # opens the deployed URL
+railway link                       # select existing project / service
+railway variables --set SESSION_SECRET="$(openssl rand -base64 48)"
+railway up                         # build + deploy current branch
+railway open                       # open service URL in browser
+railway logs                       # tail deploy logs
 ```
+
+### Healthcheck
+
+`GET /api/health` is unauthenticated and returns:
+
+```json
+{ "status": "ok", "service": "alamut-compliance", "uptime": 12.34, "timestamp": "..." }
+```
+
+Railway uses it as the deploy gate (`railway.json#deploy.healthcheckPath`).
+A failing healthcheck rolls the deploy back automatically.
 
 ## Project layout
 
