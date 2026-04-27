@@ -1,6 +1,18 @@
 # Nixpacks build config for Railway.
 # Pins Node 20 (matches package.json "engines" and .node-version) and runs
 # the project's standard install/build/start scripts.
+#
+# We deliberately use `npm install` instead of `npm ci`: Railway/Nixpacks
+# caches `node_modules/.cache` between builds, and `npm ci` wipes the entire
+# `node_modules/` directory before reinstalling — which races against the
+# cached path and fails with `EBUSY: resource busy or locked, rmdir
+# '/app/node_modules/.cache'`. `npm install` mutates in place and avoids the
+# rmdir, while `package-lock.json` still keeps the install deterministic.
+#
+# `--include=dev` ensures Vite/esbuild (devDependencies) are present at build
+# time even when Railway sets `NODE_ENV=production`. The build emits a
+# bundled `dist/index.cjs`, after which devDependencies are no longer needed
+# at runtime.
 
 providers = ["node"]
 
@@ -8,7 +20,7 @@ providers = ["node"]
 nixPkgs = ["nodejs_20", "npm-9_x"]
 
 [phases.install]
-cmds = ["npm ci"]
+cmds = ["npm install --include=dev --no-audit --no-fund"]
 
 [phases.build]
 cmds = ["npm run build"]

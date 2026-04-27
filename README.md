@@ -114,7 +114,8 @@ to `main` redeploys the connected service automatically. Configuration files:
 | File             | Purpose                                                         |
 | ---------------- | --------------------------------------------------------------- |
 | `railway.json`   | Builder (Nixpacks), build/start commands, healthcheck path      |
-| `nixpacks.toml`  | Pins Node 20, runs `npm ci` → `npm run build` → `npm run start` |
+| `nixpacks.toml`  | Pins Node 20, runs `npm install` → `npm run build` → `npm run start` |
+| `.npmrc`         | Forces `include=dev` so Vite/esbuild are available at build time |
 | `Procfile`       | `web: npm run start` — fallback for buildpack-style hosts       |
 
 The server binds to `process.env.PORT` (Railway-provided) and defaults to
@@ -136,8 +137,9 @@ serves both the bundled API (`dist/index.cjs`) and the built client
 5. Open **Settings → Networking → Generate Domain** to mint a public URL
    (something like `alamut-compliance-production.up.railway.app`).
 6. Click **Deploy** (top-right) to redeploy with the new variables. Railway
-   will run `npm ci && npm run build`, start the server, and probe
-   `/api/health` until it returns `200` before flipping traffic.
+   will run `npm install --include=dev --no-audit --no-fund && npm run build`,
+   start the server, and probe `/api/health` until it returns `200` before
+   flipping traffic.
 7. Verify the deploy:
    ```bash
    curl https://<your-service>.up.railway.app/api/health
@@ -171,6 +173,51 @@ railway up                         # build + deploy current branch
 railway open                       # open service URL in browser
 railway logs                       # tail deploy logs
 ```
+
+### Troubleshooting
+
+#### `EBUSY: resource busy or locked, rmdir '/app/node_modules/.cache'`
+
+Symptom — Railway build fails during the install phase with:
+
+```
+npm error code EBUSY
+npm error syscall rmdir
+npm error path /app/node_modules/.cache
+npm error errno -16
+npm error EBUSY: resource busy or locked, rmdir '/app/node_modules/.cache'
+Build Failed: ... exit code: 240
+```
+
+Cause — Nixpacks caches the `node_modules/.cache` path between builds for
+faster incremental installs. `npm ci` deletes the entire `node_modules/`
+directory before reinstalling, which races against the still-mounted cache
+layer and fails with `EBUSY`.
+
+Fix — already applied in this repo. The install phase now uses
+`npm install --include=dev --no-audit --no-fund` (in `railway.json`,
+`nixpacks.toml`, and `.npmrc`), which mutates `node_modules/` in place
+instead of removing it. `package-lock.json` keeps the install deterministic.
+
+If you still see the error after pulling these changes:
+
+1. In the Railway service, open **Settings → Danger → Clear Build Cache**
+   (or in the deploy view, the three-dot menu → **Clear build cache**).
+2. Trigger a new deploy (push a commit, or **Deploy → Redeploy**).
+3. The first build after clearing the cache rebuilds from scratch; subsequent
+   builds reuse the cached layers safely.
+
+#### `Cannot find module 'vite'` / `esbuild` / `tsx` during build
+
+Cause — Railway sets `NODE_ENV=production` for the deploy, and some npm
+configurations skip `devDependencies` when that's set. The build script
+(`script/build.ts`) needs Vite, esbuild, and tsx, all of which live under
+`devDependencies`.
+
+Fix — already applied. The `.npmrc` at the repo root sets `production=false`
+and `include=dev`, and the install command passes `--include=dev` explicitly.
+After the build emits `dist/index.cjs`, the runtime no longer needs these
+packages.
 
 ### Healthcheck
 
