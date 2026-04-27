@@ -319,6 +319,24 @@ and `include=dev`, and the install command passes `--include=dev` explicitly.
 After the build emits `dist/index.cjs`, the runtime no longer needs these
 packages.
 
+#### `column "polname" does not exist` when running migrations
+
+Symptom — applying `supabase/migrations/0001_init.sql` (or 0002/0003) against
+a fresh Supabase project fails with:
+
+```
+ERROR:  column "polname" does not exist
+HINT:   Perhaps you meant to reference the column "pg_policies.policyname".
+```
+
+Cause — older revisions of these migrations guarded `create policy` blocks
+with `select 1 from pg_policies where polname = '...'`. Supabase/Postgres
+exposes the policy name as `policyname`, not `polname`.
+
+Fix — already applied on `main`. Pull the latest migrations and re-run them
+in the Supabase SQL Editor. No action is needed if you are deploying from
+the current `main`.
+
 ### Healthcheck
 
 `GET /api/health` is unauthenticated and returns:

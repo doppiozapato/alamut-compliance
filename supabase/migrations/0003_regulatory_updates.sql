@@ -33,7 +33,7 @@ alter table public.regulatory_updates enable row level security;
 do $$
 begin
   if not exists (
-    select 1 from pg_policies where polname = 'regulatory_updates_read'
+    select 1 from pg_policies where policyname = 'regulatory_updates_read'
   ) then
     create policy regulatory_updates_read
       on public.regulatory_updates for select using (true);

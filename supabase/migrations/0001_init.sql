@@ -94,19 +94,19 @@ alter table public.attestations          enable row level security;
 -- Anon read of public reference data (chapters, obligations, modules registry).
 do $$
 begin
-  if not exists (select 1 from pg_policies where polname = 'manual_chapters_read') then
+  if not exists (select 1 from pg_policies where policyname = 'manual_chapters_read') then
     create policy manual_chapters_read on public.manual_chapters for select using (true);
   end if;
-  if not exists (select 1 from pg_policies where polname = 'obligations_read') then
+  if not exists (select 1 from pg_policies where policyname = 'obligations_read') then
     create policy obligations_read on public.compliance_obligations for select using (true);
   end if;
-  if not exists (select 1 from pg_policies where polname = 'team_members_read') then
+  if not exists (select 1 from pg_policies where policyname = 'team_members_read') then
     create policy team_members_read on public.team_members for select using (true);
   end if;
-  if not exists (select 1 from pg_policies where polname = 'attestations_read') then
+  if not exists (select 1 from pg_policies where policyname = 'attestations_read') then
     create policy attestations_read on public.attestations for select using (true);
   end if;
-  if not exists (select 1 from pg_policies where polname = 'templates_read') then
+  if not exists (select 1 from pg_policies where policyname = 'templates_read') then
     create policy templates_read on public.attestation_templates for select using (true);
   end if;
 end$$;

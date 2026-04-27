@@ -36,7 +36,7 @@ alter table public.manual_sections enable row level security;
 
 do $$
 begin
-  if not exists (select 1 from pg_policies where polname = 'manual_sections_read') then
+  if not exists (select 1 from pg_policies where policyname = 'manual_sections_read') then
     create policy manual_sections_read on public.manual_sections for select using (true);
   end if;
 end$$;
