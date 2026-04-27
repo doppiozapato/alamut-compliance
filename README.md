@@ -40,6 +40,20 @@ npm run dev      # http://localhost:8080
 Without Supabase configured the app boots against in-memory seed data so you
 can see the full UI immediately. Configure Supabase to persist changes.
 
+## Access model
+
+| Group                  | Logins                                    | Sees                                                                                       |
+| ---------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------ |
+| **Admins**             | `tom@alamut-im.com`, `alice@alamut-im.com`| Full dashboard incl. **Admin** tab (firm-wide attestation oversight, team management).     |
+| **Compliance officer** | `compliance@alamut-im.com`                | Full dashboard except `/admin`; can edit manual chapters and obligation status.            |
+| **Other team members** | One row per person in `team_members`      | Slimmer **Team Portal**: their own attestations, the manual, FCA reference, calendar, regulatory updates. No admin oversight, no team-wide views. |
+
+The portal label in the header (`Admin Portal` / `Compliance Portal` /
+`Team Portal`) reflects which group the signed-in user belongs to. The
+backend enforces the same boundary — `/api/admin/*` returns `403` for
+non-admins, and `/api/attestations` only ever returns the requester's own
+rows when the requester is not admin/compliance.
+
 ### Admin accounts
 
 Two senior personnel hold admin rights on the dashboard. Their emails are
@@ -49,6 +63,23 @@ the only place this is configured:
 | ---------------------- | ------------------------------- | --------------------------------------- |
 | Primary superuser/admin| `tom@alamut-im.com`             | hard-wired in seed + Supabase           |
 | Second admin           | `alice@alamut-im.com`           | seeded by default; overridable via `SECOND_ADMIN_EMAIL` (or `ADMIN_EMAILS`) |
+
+Tom and Alice can sign in with `ADMIN_DEV_PASSWORD` until each row in
+`team_members` is updated with a bcrypt `password_hash`; once every admin
+row has a hash, drop `ADMIN_DEV_PASSWORD` from Railway.
+
+#### Email shorthand at the login screen
+
+The login handler accepts the shorthand local-part:
+
+- `tom` → expanded to `tom@alamut-im.com`
+- `alice@alamut-im` → expanded to `alice@alamut-im.com`
+- `tom@alamut-im.com` → used as-is
+
+Anything containing a different domain is passed through unchanged so a
+typo cannot silently bind to a wrong row. The same normalisation runs in
+`script/setTeamMemberPassword.ts` so the row written there matches what
+the user types at sign-in.
 
 To activate or change the second admin:
 
@@ -97,6 +128,44 @@ exclusively follow path 1 once hashes are present.
 const bcrypt = require('bcryptjs');
 console.log(bcrypt.hashSync('the-password', 10));
 ```
+
+#### Provisioning a password for a single user
+
+`script/setTeamMemberPassword.ts` wraps the same step so the plaintext
+password never appears on the command line, in shell history, or in
+process output. The script reads the email and password from environment
+variables, generates a bcrypt hash locally, and either updates Supabase
+directly (when service-role credentials are present) or prints a
+ready-to-paste `UPDATE` statement for the SQL editor.
+
+Direct update against Supabase:
+
+```bash
+ALAMUT_USER_EMAIL='alice@alamut-im.com' \
+ALAMUT_USER_PASSWORD='<the password>' \
+SUPABASE_URL='https://<ref>.supabase.co' \
+SUPABASE_SERVICE_ROLE_KEY='<service-role>' \
+npx tsx script/setTeamMemberPassword.ts
+```
+
+Print-the-SQL mode (no Supabase env vars set):
+
+```bash
+ALAMUT_USER_EMAIL='alice@alamut-im' \
+ALAMUT_USER_PASSWORD='<the password>' \
+npx tsx script/setTeamMemberPassword.ts
+# → update public.team_members set password_hash = '$2b$12$...' where lower(email) = 'alice@alamut-im.com';
+```
+
+Notes:
+
+- The plaintext password is only read from `ALAMUT_USER_PASSWORD` and is
+  never echoed to stdout/stderr or written to disk.
+- Email shorthand (`tom`, `alice@alamut-im`) is normalised to the full
+  `@alamut-im.com` address — the same rule the login screen uses.
+- The script refuses passwords shorter than 8 characters.
+- `team_members` rows must already exist (the seed creates them); this
+  script only sets `password_hash`.
 
 ### Role permissions
 

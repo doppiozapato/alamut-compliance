@@ -41,7 +41,16 @@ export default function Dashboard() {
   );
   const myAttestations = attestations.filter((a) => a.status !== "completed").slice(0, 6);
 
-  const cards = [
+  // Admin / compliance see firm-wide oversight cards; team members see a
+  // narrower set scoped to their own attestations and the firm calendar.
+  const isOversight = user?.role === "admin" || user?.role === "compliance";
+  const cards: Array<{
+    label: string;
+    value: number | string;
+    icon: any;
+    href: string;
+    tone?: string;
+  }> = [
     { label: "Manual chapters", value: stats?.totalChapters ?? "—", icon: BookOpen, href: "/manual" },
     { label: "Upcoming obligations", value: stats?.upcomingObligations ?? "—", icon: CalendarDays, href: "/calendar" },
     {
@@ -51,17 +60,36 @@ export default function Dashboard() {
       href: "/calendar",
       tone: (stats?.overdueObligations ?? 0) > 0 ? "warn" : undefined,
     },
-    { label: "Pending attestations", value: stats?.pendingAttestations ?? "—", icon: CheckSquare, href: "/attestations" },
-    { label: "Completed attestations", value: stats?.completedAttestations ?? "—", icon: CheckSquare, href: "/attestations" },
-    { label: "Team members", value: stats?.teamMembers ?? "—", icon: Users, href: user?.role === "admin" ? "/admin" : "/attestations" },
+    {
+      label: isOversight ? "Pending attestations" : "My pending",
+      value: stats?.pendingAttestations ?? "—",
+      icon: CheckSquare,
+      href: "/attestations",
+    },
+    {
+      label: isOversight ? "Completed attestations" : "My completed",
+      value: stats?.completedAttestations ?? "—",
+      icon: CheckSquare,
+      href: "/attestations",
+    },
   ];
+  if (isOversight && stats?.teamMembers != null) {
+    cards.push({
+      label: "Team members",
+      value: stats.teamMembers,
+      icon: Users,
+      href: user?.role === "admin" ? "/admin" : "/attestations",
+    });
+  }
 
   return (
     <div className="px-6 py-6 max-w-7xl mx-auto space-y-6">
       <div>
         <h1 className="text-base font-semibold">Welcome back, {user?.full_name}</h1>
         <p className="text-xs text-muted-foreground mt-0.5">
-          Here is the firm and fund compliance posture as of {formatDate(today)}.
+          {isOversight
+            ? `Here is the firm and fund compliance posture as of ${formatDate(today)}.`
+            : `Here is your team portal — your attestations, the firm manual, and the compliance calendar as of ${formatDate(today)}.`}
         </p>
       </div>
 

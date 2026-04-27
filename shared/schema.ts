@@ -144,5 +144,6 @@ export interface DashboardStats {
   overdueObligations: number;
   pendingAttestations: number;
   completedAttestations: number;
-  teamMembers: number;
+  // null for non-admin viewers — the team portal does not surface headcount.
+  teamMembers: number | null;
 }

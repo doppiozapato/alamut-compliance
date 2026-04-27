@@ -41,6 +41,23 @@ function requireRole(...roles: Role[]) {
   };
 }
 
+// Normalises a login identifier to a full email address. The firm uses
+// `@alamut-im.com` for every account, and users sometimes type the
+// shorthand local-part (`tom@alamut-im`, or even bare `tom`). We add the
+// `.com` TLD when the host is `alamut-im` with no TLD, and append the full
+// domain when the input has no `@` at all. Anything else (a different
+// domain, a malformed string) is returned untouched so the lookup will
+// fail rather than silently auth-bind to the wrong row.
+const ALAMUT_DOMAIN = "alamut-im.com";
+function normaliseLoginEmail(input: string): string {
+  const trimmed = input.trim().toLowerCase();
+  if (!trimmed) return trimmed;
+  if (!trimmed.includes("@")) return `${trimmed}@${ALAMUT_DOMAIN}`;
+  const [local, host] = trimmed.split("@");
+  if (host === "alamut-im") return `${local}@${ALAMUT_DOMAIN}`;
+  return trimmed;
+}
+
 export async function registerRoutes(app: Express) {
   // ─── Health ───────────────────────────────────────────────────────────────
   // Unauthenticated liveness probe used by Railway's healthcheck.
@@ -56,12 +73,16 @@ export async function registerRoutes(app: Express) {
   // ─── Auth ─────────────────────────────────────────────────────────────────
 
   app.post("/api/auth/login", async (req, res) => {
-    const { email, password } = req.body as { email?: string; password?: string };
-    if (!email || !password) return res.status(400).json({ error: "email and password required" });
+    const { email: rawEmail, password } = req.body as { email?: string; password?: string };
+    if (!rawEmail || !password) return res.status(400).json({ error: "email and password required" });
+
+    const email = normaliseLoginEmail(rawEmail);
 
     const user = await findUserByEmail(email);
     if (!user || !user.is_active) {
-      console.warn(`[auth] login rejected for ${email}: no active user found (supabaseEnabled=${supabaseEnabled})`);
+      console.warn(
+        `[auth] login rejected for ${email} (raw="${rawEmail}"): no active user found (supabaseEnabled=${supabaseEnabled})`,
+      );
       return res.status(401).json({ error: "Invalid credentials" });
     }
 
@@ -143,11 +164,16 @@ export async function registerRoutes(app: Express) {
   // ─── Stats ────────────────────────────────────────────────────────────────
 
   app.get("/api/stats", requireAuth, async (req, res) => {
+    const requester = req.session.user!;
+    const isOversight = requester.role === "admin" || requester.role === "compliance";
+
+    // Admin/compliance see firm-wide attestation totals; everyone else sees
+    // only their own counts so the team portal does not leak headcount.
     const [chapters, obligations, attestations, members] = await Promise.all([
       listChapters(),
       listObligations(),
-      listAttestations(),
-      listTeamMembers(),
+      isOversight ? listAttestations() : listAttestations({ user_id: requester.id }),
+      isOversight ? listTeamMembers() : Promise.resolve([]),
     ]);
     const today = new Date().toISOString().slice(0, 10);
     res.json({
@@ -156,7 +182,7 @@ export async function registerRoutes(app: Express) {
       overdueObligations: obligations.filter((o) => o.status === "overdue" || (o.status !== "submitted" && o.next_due < today)).length,
       pendingAttestations: attestations.filter((a) => a.status !== "completed").length,
       completedAttestations: attestations.filter((a) => a.status === "completed").length,
-      teamMembers: members.length,
+      teamMembers: isOversight ? members.length : null,
     });
   });
 

@@ -28,6 +28,14 @@ const NAV: { href: string; label: string; icon: any; roles?: string[] }[] = [
   { href: "/admin", label: "Admin", icon: Settings, roles: ["admin"] },
 ];
 
+// Admins (and the compliance officer) see the full oversight portal; everyone
+// else sees a slimmer "Team Portal" with only the items they need to action.
+function portalLabel(role: string): string {
+  if (role === "admin") return "Admin Portal";
+  if (role === "compliance") return "Compliance Portal";
+  return "Team Portal";
+}
+
 interface Props {
   user: CurrentUser;
   children: React.ReactNode;
@@ -110,6 +118,8 @@ export default function Layout({ user, children, onLogout }: Props) {
           <div className="px-6 py-3 flex items-center justify-between gap-4">
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <span className="font-medium text-foreground">Alamut Compliance</span>
+              <span className="text-muted-foreground/60">·</span>
+              <span className="font-medium text-foreground/80">{portalLabel(user.role)}</span>
               <span className="text-muted-foreground/60">/</span>
               <span>{location === "/" ? "Dashboard" : location.replace(/^\//, "").replace(/-/g, " ")}</span>
             </div>
