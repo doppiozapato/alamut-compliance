@@ -8,6 +8,8 @@ Internal dashboard for Alamut covering:
   cross-references.
 - **FCA Handbook reference** — searchable index of all Handbook modules linking back to [handbook.fca.org.uk](https://handbook.fca.org.uk/handbook).
 - **Compliance Calendar** — firm and fund regulatory reporting obligations with status tracking.
+- **Regulatory Updates** — quarterly digest of FCA / FATF / market guidance with a
+  per-quarter dropdown selector, parsed from the firm's quarterly DOCX bulletin.
 - **Attestations** — per-team-member sign-offs (Code of Conduct, PA Dealing, AML, etc).
 - **Admin oversight** — senior admins see attestation status across the entire team.
 
@@ -92,7 +94,12 @@ To activate or change the second admin:
    ```
    supabase/migrations/0001_init.sql
    supabase/migrations/0002_manual_sections.sql
+   supabase/migrations/0003_regulatory_updates.sql
    supabase/seed.sql
+   ```
+   Then push the parsed regulatory updates JSON into the new table:
+   ```
+   SUPABASE_SERVICE_ROLE_KEY=... npx tsx script/importRegulatoryUpdates.ts
    ```
 3. (Recommended) Switch the seeded plaintext passwords to bcrypt hashes and
    move the password column out of public exposure (RLS already blocks
@@ -156,6 +163,44 @@ SUPABASE_SERVICE_ROLE_KEY=... npx tsx script/importManual.ts ./manual/
 
 When `script/importManual.ts` is given a directory it falls through to
 that path; otherwise it consumes the parsed JSON.
+
+### Importing quarterly Regulatory Updates
+
+The Regulatory Updates tab is driven by parsed JSON committed under
+`script/regulatoryUpdates/` (one file per quarter, e.g. `Q1-2026.json`). The
+repo ships with **Q1 2026** already imported. To add a new quarter:
+
+```bash
+# 1. Parse the quarterly DOCX bulletin into structured JSON.
+#    Default output path is script/regulatoryUpdates/<Q>-<YYYY>.json,
+#    derived from the filename (or the earliest date in the document).
+python3 script/parseRegulatoryUpdatesDocx.py \
+    /path/to/Alamut-Q2-2026-Regulatory-Updates.docx
+
+# 2. (Optional) Inspect the JSON and commit it to the repo so the in-memory
+#    fallback and Railway deploy can serve the new quarter immediately.
+git add script/regulatoryUpdates/Q2-2026.json
+git commit -m "Add Q2 2026 regulatory updates"
+
+# 3. Rebuild — `script/build.ts` copies every JSON in
+#    script/regulatoryUpdates/ next to the bundle for production.
+npm run build
+
+# 4. (Production) Push the rows to Supabase.
+SUPABASE_SERVICE_ROLE_KEY=... npx tsx script/importRegulatoryUpdates.ts
+# Pass an explicit file or directory if you want to scope the upsert:
+SUPABASE_SERVICE_ROLE_KEY=... npx tsx script/importRegulatoryUpdates.ts \
+    script/regulatoryUpdates/Q2-2026.json
+```
+
+The DOCX parser walks the Word XML directly (no `python-docx` dependency),
+extracts the bold-rendered title from each Update cell, normalises dates
+like `9th January 2026` → `2026-01-09`, and recovers all hyperlinks from
+the document relationships. The output JSON is deterministic across
+re-runs so commits stay clean.
+
+The Supabase importer upserts on `(year, quarter, section, date_published, title)`,
+so re-running the script after a manual edit to the JSON is safe.
 
 ## Railway deployment
 
@@ -326,7 +371,10 @@ alamut-compliance/
 │   ├── build.ts               # esbuild + vite build
 │   ├── parseManualPdf.py      # PDF → script/manualData.json (chapters + sections)
 │   ├── manualData.json        # parsed Alamut Compliance Manual (committed)
-│   └── importManual.ts        # JSON / markdown → manual_chapters + manual_sections
+│   ├── importManual.ts        # JSON / markdown → manual_chapters + manual_sections
+│   ├── parseRegulatoryUpdatesDocx.py  # DOCX → script/regulatoryUpdates/<Q>-<YYYY>.json
+│   ├── regulatoryUpdates/     # one JSON per quarter (Q1-2026.json committed)
+│   └── importRegulatoryUpdates.ts     # JSON → regulatory_updates (Supabase)
 ├── railway.json
 ├── tailwind.config.ts
 ├── tsconfig.json

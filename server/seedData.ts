@@ -13,8 +13,10 @@ import type {
   ComplianceObligation,
   Attestation,
   AttestationTemplate,
+  RegulatoryUpdate,
 } from "../shared/schema";
 import { buildSeedChaptersFromPdf, MANUAL_SOURCE } from "./manualSeed";
+import { buildSeedRegulatoryUpdates } from "./regulatoryUpdatesSeed";
 
 // ─── Team members / credentials ──────────────────────────────────────────────
 //
@@ -589,3 +591,11 @@ function buildSeedAttestations(): Attestation[] {
 }
 
 export const SEED_ATTESTATIONS: Attestation[] = buildSeedAttestations();
+
+// ─── Regulatory updates ──────────────────────────────────────────────────────
+//
+// Quarterly digest loaded from JSON files under `script/regulatoryUpdates/`.
+// New quarters are added by running the DOCX importer (see README) — no code
+// change required.
+
+export const SEED_REGULATORY_UPDATES: RegulatoryUpdate[] = buildSeedRegulatoryUpdates();

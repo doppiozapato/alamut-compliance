@@ -10,6 +10,7 @@ import {
   SEED_OBLIGATIONS,
   SEED_ATTESTATIONS,
   SEED_TEMPLATES,
+  SEED_REGULATORY_UPDATES,
   SeedUser,
 } from "./seedData";
 import type {
@@ -19,6 +20,8 @@ import type {
   ComplianceObligation,
   Attestation,
   AttestationTemplate,
+  RegulatoryUpdate,
+  RegulatoryUpdateQuarter,
 } from "../shared/schema";
 
 // In-memory mirrors used when Supabase is unavailable.
@@ -28,6 +31,7 @@ const memSections: ManualSection[] = [...SEED_SECTIONS];
 const memObligations: ComplianceObligation[] = [...SEED_OBLIGATIONS];
 const memAttestations: Attestation[] = [...SEED_ATTESTATIONS];
 const memTemplates: AttestationTemplate[] = [...SEED_TEMPLATES];
+const memRegulatoryUpdates: RegulatoryUpdate[] = [...SEED_REGULATORY_UPDATES];
 
 function nextId<T extends { id: number }>(rows: T[]): number {
   return rows.reduce((m, r) => Math.max(m, r.id), 0) + 1;
@@ -220,4 +224,73 @@ export async function listAttestationTemplates(): Promise<AttestationTemplate[]>
     return (data as AttestationTemplate[]) ?? [];
   }
   return memTemplates;
+}
+
+// ─── Regulatory updates ──────────────────────────────────────────────────────
+
+function decorateUpdates(rows: RegulatoryUpdate[]): RegulatoryUpdate[] {
+  // Newest quarter first; within a quarter, newest dates first; regulatory
+  // entries before enforcement entries (a stable secondary key).
+  return [...rows].sort((a, b) => {
+    if (a.year !== b.year) return b.year - a.year;
+    if (a.quarter !== b.quarter) return b.quarter.localeCompare(a.quarter);
+    if (a.section !== b.section) return a.section === "regulatory" ? -1 : 1;
+    return b.date_published.localeCompare(a.date_published);
+  });
+}
+
+export async function listRegulatoryUpdates(opts: {
+  quarter?: string;
+  year?: number;
+  section?: "regulatory" | "enforcement";
+} = {}): Promise<RegulatoryUpdate[]> {
+  if (supabaseEnabled && supabase) {
+    let q = supabase.from("regulatory_updates").select("*");
+    if (opts.year != null) q = q.eq("year", opts.year);
+    if (opts.quarter) q = q.eq("quarter", opts.quarter);
+    if (opts.section) q = q.eq("section", opts.section);
+    const { data, error } = await q
+      .order("year", { ascending: false })
+      .order("quarter", { ascending: false })
+      .order("date_published", { ascending: false });
+    if (error) {
+      console.warn(`[store] regulatory_updates query failed: ${error.message}`);
+      return [];
+    }
+    const rows = (data ?? []).map((r: any) => ({
+      ...r,
+      quarter_label: `${r.quarter} ${r.year}`,
+      useful_links: Array.isArray(r.useful_links) ? r.useful_links : [],
+    })) as RegulatoryUpdate[];
+    return decorateUpdates(rows);
+  }
+  let rows = memRegulatoryUpdates;
+  if (opts.year != null) rows = rows.filter((r) => r.year === opts.year);
+  if (opts.quarter) rows = rows.filter((r) => r.quarter === opts.quarter);
+  if (opts.section) rows = rows.filter((r) => r.section === opts.section);
+  return decorateUpdates(rows);
+}
+
+export async function listRegulatoryQuarters(): Promise<RegulatoryUpdateQuarter[]> {
+  const rows = await listRegulatoryUpdates();
+  const map = new Map<string, RegulatoryUpdateQuarter>();
+  for (const r of rows) {
+    const key = `${r.year}-${r.quarter}`;
+    const existing = map.get(key);
+    if (existing) {
+      existing.count += 1;
+    } else {
+      map.set(key, {
+        quarter: r.quarter,
+        year: r.year,
+        label: r.quarter_label || `${r.quarter} ${r.year}`,
+        count: 1,
+        source_document: r.source_document ?? null,
+      });
+    }
+  }
+  return Array.from(map.values()).sort((a, b) => {
+    if (a.year !== b.year) return b.year - a.year;
+    return b.quarter.localeCompare(a.quarter);
+  });
 }

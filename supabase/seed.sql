@@ -82,3 +82,15 @@ from public.team_members m
 cross join public.attestation_templates t
 where m.is_active
 on conflict do nothing;
+
+-- ─── Regulatory Updates ──────────────────────────────────────────────────────
+-- Quarterly regulatory digest data is loaded by `script/importRegulatoryUpdates.ts`,
+-- which reads JSON files under `script/regulatoryUpdates/` (one per quarter).
+-- After running migration 0003, populate the table with:
+--
+--   SUPABASE_SERVICE_ROLE_KEY=... npx tsx script/importRegulatoryUpdates.ts
+--
+-- New quarterly DOCX files can be ingested at any time via:
+--
+--   python3 script/parseRegulatoryUpdatesDocx.py /path/to/Alamut-Q2-2026-...docx
+--   SUPABASE_SERVICE_ROLE_KEY=... npx tsx script/importRegulatoryUpdates.ts

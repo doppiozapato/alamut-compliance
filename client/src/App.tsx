@@ -12,6 +12,7 @@ import Manual from "@/pages/Manual";
 import ChapterView from "@/pages/ChapterView";
 import FCAReference from "@/pages/FCAReference";
 import Calendar from "@/pages/Calendar";
+import RegulatoryUpdates from "@/pages/RegulatoryUpdates";
 import Attestations from "@/pages/Attestations";
 import Admin from "@/pages/Admin";
 import NotFound from "@/pages/not-found";
@@ -28,6 +29,7 @@ function AppRoutes({ user, onLogout }: { user: CurrentUser; onLogout: () => void
           </Route>
           <Route path="/fca" component={FCAReference} />
           <Route path="/calendar" component={Calendar} />
+          <Route path="/regulatory-updates" component={RegulatoryUpdates} />
           <Route path="/attestations" component={Attestations} />
           <Route path="/admin" component={Admin} />
           <Route component={NotFound} />

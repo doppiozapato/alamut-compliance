@@ -1,0 +1,161 @@
+{
+  "quarter": "Q1",
+  "year": 2026,
+  "label": "Q1 2026",
+  "source_document": "Alamut-Q1-2026-Regulatory-Updates.docx",
+  "imported_at": "2026-04-27T16:17:29Z",
+  "updates": [
+    {
+      "section": "regulatory",
+      "date_published": "2026-01-09",
+      "date_published_label": "9 January 2026",
+      "category": "Enforcement/ Market Conduct",
+      "title": "FCA: Enforcement Activity and Fines",
+      "body": "The FCA has updated its Fines webpage confirming that total fines published during 2025 amounted to £124,221,367.45 (excluding\ncourt fines).\n\nThe fines relate to a wide range of misconduct, including market abuse, transaction reporting failures, financial crime systems and controls, governance weaknesses and individual conduct breaches, with enforcement action taken against both firms and individuals.\n\nThe FCA has also published early data for 2026, with five fines already recorded totalling £2,518,323, indicating continued enforcement focus.",
+      "effective_date": null,
+      "effective_date_label": null,
+      "useful_links": [
+        {
+          "label": "2025 fines | FCA",
+          "url": "https://www.fca.org.uk/news/news-stories/2025-fines"
+        },
+        {
+          "label": "2026 fines | FCA",
+          "url": "https://www.fca.org.uk/news/news-stories/2026-fines"
+        }
+      ]
+    },
+    {
+      "section": "regulatory",
+      "date_published": "2026-01-22",
+      "date_published_label": "22 January 2026",
+      "category": "Parliamentary report / AI governance",
+      "title": "Treasury Select Committee - Artificial Intelligence in Financial Services",
+      "body": "The Treasury Select Committee published its report Artificial intelligence in financial services, concluding that the FCA, the Bank of England and HM Treasury are not doing enough to manage the risks presented by AI in financial services and that a \"wait-and-see\" approach risks harm to consumers and financial stability. The Committee recommends that by the end of 2026 the FCA publish comprehensive, practical guidance for firms on how existing consumer protection rules apply to the use of AI, and on accountability and assurance expectations for senior managers under the SM&CR where harm arises from AI use. The report states that the FCA must provide greater clarity to firms on the application of existing rules to AI.",
+      "effective_date": null,
+      "effective_date_label": "By end-2026 (recommended)",
+      "useful_links": [
+        {
+          "label": "Treasury Committee - Summary - Committees - UK Parliament",
+          "url": "https://committees.parliament.uk/committee/158/treasury-committee/"
+        }
+      ]
+    },
+    {
+      "section": "regulatory",
+      "date_published": "2026-01-26",
+      "date_published_label": "26 January 2026",
+      "category": "Market infrastructure / Settlement",
+      "title": "FCA - Accelerated Settlement (T+1): Progress Update",
+      "body": "The FCA has welcomed the Accelerated Settlement Taskforce's (AST) 2025 progress report, confirming that the move to T+1 settlement remains on track for 11 October 2027 in the UK, aligned with the EU and Switzerland. The report highlights that 66% of the industry is now in project mode for UK T+1 implementation, and that AST has established formal relationships with T+1 project teams across all three jurisdictions, with a shared commitment to the common go-live date. Readiness surveys show that while 19% of respondents considered themselves ready for T+1 at the end of Q1, this fell to 11% by Q3, reflecting a more realistic assessment of the scale of operational and systems change required. The FCA expects firms to update systems and processes and be ready to test changes by the end of 2026, and notes that AST has published FAQs and established a facility for firms to submit implementation questions directly.",
+      "effective_date": "2027-10-11",
+      "effective_date_label": "11/10/2027",
+      "useful_links": [
+        {
+          "label": "FCA welcomes the Accelerated Settlement Taskforce’s 2025 report on T+1 progress | FCA",
+          "url": "https://www.fca.org.uk/news/statements/fca-welcomes-report-t-plus-1-progress-2025"
+        }
+      ]
+    },
+    {
+      "section": "regulatory",
+      "date_published": "2026-02-13",
+      "date_published_label": "13 February 2026",
+      "category": "Anti Money-Laundering (AML)",
+      "title": "Update to FATF Grey List re Kuwait and Papua New Guinea",
+      "body": "The Financial Action Task Force (FATF) has updated its 'Grey List' of countries - being jurisdictions that are actively working to address identified strategic deficiencies in their regimes to counter money laundering, terrorist financing, and proliferation financing - to include Papua New Guinea and Kuwait.\n\nThere has been no change to the FATF 'Black list' (High-Risk Jurisdictions subject to a Call for Action and includes e.g. Iran).\n\nUnder the UK's Money Laundering Regulations (Regulation 33), enhanced due diligence measures and enhanced ongoing monitoring must be applied in any business relationship with a person (or in relation to any relevant transaction) established in such high-risk third countries.",
+      "effective_date": null,
+      "effective_date_label": null,
+      "useful_links": [
+        {
+          "label": "\"Black and grey\" lists",
+          "url": "https://www.fatf-gafi.org/en/countries/black-and-grey-lists.html"
+        },
+        {
+          "label": "The Money Laundering, Terrorist Financing and Transfer of Funds (Information on the Payer) Regulations 2017",
+          "url": "https://www.legislation.gov.uk/uksi/2017/692/regulation/33"
+        }
+      ]
+    },
+    {
+      "section": "regulatory",
+      "date_published": "2026-02-16",
+      "date_published_label": "16 February 2026",
+      "category": "Whistleblowing",
+      "title": "FCA Whistleblowing Data Q4 2025",
+      "body": "The FCA operates a dedicated Whistleblowing Team for reports of potential wrongdoing by regulated firms or individuals. In Q4 2025, the FCA received 281 new whistleblowing reports (down from 405 in Q3), comprising 788 allegations, around one-third of which were submitted anonymously; 109 allegations related to compliance matters. Due to confidentiality protections, the FCA does not publish details of specific allegations.\n\nDuring the same period, 282 reports were closed: 3% resulted in significant action (e.g. enforcement or restrictions), 34% led to action to reduce harm (such as supervisory engagement), 58% informed supervisory work without direct action, and 5% were not indicative of harm. The data demonstrates that whistleblowing remains a material input into the FCA's supervisory and enforcement activity.",
+      "effective_date": null,
+      "effective_date_label": null,
+      "useful_links": [
+        {
+          "label": "Whistleblowing quarterly data 2025 Q4 | FCA",
+          "url": "https://www.fca.org.uk/data/whistleblowing-quarterly-data-2025-q4"
+        }
+      ]
+    },
+    {
+      "section": "regulatory",
+      "date_published": "2026-02-17",
+      "date_published_label": "17 February 2026",
+      "category": null,
+      "title": "Market Observations",
+      "body": "The FCA has published a table relating to the number of market observations it received in 2025. A total of 302 'observations' were recorded compared to 341 in 2024.\n\nWhilst a 'Suspicious Transaction and Order Report (STOR) is an obligation (under Article 16 of the Market Abuse Regulations) for persons professionally arranging or executing transactions where such a person has a \"reasonable suspicion' of there being market abuse, the submission of a 'market observation' is voluntary.\n\nAs the FCA explains \"firms and trading venues may want to notify us of activity they have observed in the market that isn't required as a STOR. For example, the firm or trading venue isn't involved in the activity and therefore doesn't have complete information. In these cases, please submit a market observation.",
+      "effective_date": null,
+      "effective_date_label": null,
+      "useful_links": [
+        {
+          "label": "Number of market observations received: 2025 | FCA",
+          "url": "https://www.fca.org.uk/markets/number-market-observations-received-2025"
+        }
+      ]
+    },
+    {
+      "section": "regulatory",
+      "date_published": "2026-03-23",
+      "date_published_label": "23 March 2026",
+      "category": "Regulatory Fees",
+      "title": "FCA: Fees and Levies",
+      "body": "The FCA published Consultation Paper \"CP26/11: FCA regulated fees and levies: rates proposals for 2026/27\" on 26th March 2026.\n\nIn addition to FCA regulatory fees the paper also addresses the levies it collects for the Financial Ombudsman Service and the government e.g. Money and Pensions Service (MaPS) levies.\nThe FCA's Annual Funding Requirement (AFR) for 2026/27 is £788.9m - a year-on-year increase of 0.7%.\n\nThe AFR is essentially a combination of the ongoing regulatory activities (ORA) costs of operating the FCA (which is increased by 1%) and the recovery of costs of 'exceptional projects' - a summary in table form can be found on pages 6 & 7 of CP26/11.\n\nIn line with the increase in the ORA, authorisation fees will increase by 1% as will the minimum and flat rate periodic fees. Firms can use the FCA's online fees calculator to estimate their fees for 2026/27 (see link in para 1.7, page 5).",
+      "effective_date": "2026-04-30",
+      "effective_date_label": "30 April 2026",
+      "useful_links": [
+        {
+          "label": "CP26/11: FCA regulated fees and levies: rates proposals for 2026/27 | FCA",
+          "url": "https://www.fca.org.uk/publications/consultation-papers/cp26-11-fca-regulated-fees-and-levies-rates-proposals-2026-27"
+        }
+      ]
+    },
+    {
+      "section": "enforcement",
+      "date_published": "2026-01-16",
+      "date_published_label": "16 January 2026",
+      "category": "Enforcement / Market abuse",
+      "title": "FCA fines oil rig consultant £309,843 for insider dealing",
+      "body": "The FCA imposed a £309,843 financial penalty on an oil rig consultant for insider dealing, underscoring enforcement focus on market integrity and deterring unlawful trading conduct beyond the regulated sector.",
+      "effective_date": null,
+      "effective_date_label": null,
+      "useful_links": [
+        {
+          "label": "FCA fines oil rig consultant £309,843 for insider dealing | FCA",
+          "url": "https://www.fca.org.uk/news/press-releases/fca-fines-oil-rig-consultant-insider-dealing"
+        }
+      ]
+    },
+    {
+      "section": "enforcement",
+      "date_published": "2026-02-10",
+      "date_published_label": "10 February 2026",
+      "category": "Enforcement / Market abuse",
+      "title": "FCA Enforcement - Insider Dealing Fines Issued",
+      "body": "The FCA has issued Final Notices to two individuals for insider dealing and unlawful disclosure of inside information relating to Bidstack Group Plc shares. One individual disclosed inside information regarding a forthcoming commercial deal, and shares were acquired prior to the announcement.\n\nThe FCA was initially notified of the trading through Suspicious Transaction and Order Reports submitted by a firm \"showing the vital role of industry in uncovering market abuse.\"\n\nAlthough the article is dated 10th February, these fines appear in the FCA 'Fines Log' as at 27th January being the date of the 'Final Notice'.",
+      "effective_date": null,
+      "effective_date_label": null,
+      "useful_links": [
+        {
+          "label": "FCA fines two individuals a combined £108,731 for insider dealing | FCA",
+          "url": "https://www.fca.org.uk/news/press-releases/fca-fines-two-individuals-for-insider-dealing"
+        }
+      ]
+    }
+  ]
+}

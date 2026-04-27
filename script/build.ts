@@ -1,6 +1,6 @@
 import { build as esbuild } from "esbuild";
 import { build as viteBuild } from "vite";
-import { rm, readFile, copyFile, access } from "node:fs/promises";
+import { rm, readFile, copyFile, access, mkdir, readdir } from "node:fs/promises";
 
 // Server deps to inline-bundle. Anything *not* in this list is left as a
 // runtime require, which keeps express-session / memorystore working — they
@@ -51,6 +51,29 @@ async function buildAll() {
     console.log("copied script/manualData.json -> dist/manualData.json");
   } catch {
     console.warn("script/manualData.json not found; production bundle will use fallback chapters.");
+  }
+
+  // Copy quarterly regulatory updates JSON files so regulatoryUpdatesSeed.ts
+  // can resolve them at runtime in production deployments.
+  try {
+    const srcDir = "script/regulatoryUpdates";
+    await access(srcDir);
+    const files = await readdir(srcDir);
+    if (files.length > 0) {
+      await mkdir("dist/regulatoryUpdates", { recursive: true });
+      for (const f of files) {
+        if (f.toLowerCase().endsWith(".json")) {
+          await copyFile(`${srcDir}/${f}`, `dist/regulatoryUpdates/${f}`);
+        }
+      }
+      console.log(
+        `copied ${files.length} regulatory updates JSON -> dist/regulatoryUpdates/`,
+      );
+    }
+  } catch {
+    console.warn(
+      "script/regulatoryUpdates/ not found; Regulatory Updates tab will be empty.",
+    );
   }
 }
 

@@ -107,6 +107,37 @@ export interface AttestationTemplate {
   fca_refs: string[];
 }
 
+export interface RegulatoryUpdateLink {
+  label: string;
+  url: string;
+}
+
+export interface RegulatoryUpdate {
+  id: number;
+  quarter: string; // e.g. "Q1"
+  year: number; // e.g. 2026
+  quarter_label: string; // e.g. "Q1 2026"
+  section: "regulatory" | "enforcement";
+  date_published: string; // ISO date (YYYY-MM-DD)
+  date_published_label: string | null; // e.g. "9 January 2026"
+  category: string | null;
+  title: string;
+  body: string;
+  effective_date: string | null; // ISO date when parsable
+  effective_date_label: string | null; // free-text fallback
+  useful_links: RegulatoryUpdateLink[];
+  source_document: string | null;
+  imported_at: string; // ISO timestamp
+}
+
+export interface RegulatoryUpdateQuarter {
+  quarter: string;
+  year: number;
+  label: string;
+  count: number;
+  source_document: string | null;
+}
+
 export interface DashboardStats {
   totalChapters: number;
   upcomingObligations: number;

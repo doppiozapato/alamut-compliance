@@ -11,6 +11,8 @@ import {
   listAttestations,
   completeAttestation,
   listAttestationTemplates,
+  listRegulatoryUpdates,
+  listRegulatoryQuarters,
 } from "./store";
 import { supabaseEnabled } from "./supabase";
 import { FCA_MODULES, FCA_CATEGORIES } from "./fcaHandbook";
@@ -229,6 +231,21 @@ export async function registerRoutes(app: Express) {
 
   app.get("/api/attestations/templates", requireRole("admin", "compliance"), async (_req, res) => {
     res.json(await listAttestationTemplates());
+  });
+
+  // ─── Regulatory updates ───────────────────────────────────────────────────
+
+  app.get("/api/regulatory-updates/quarters", requireAuth, async (_req, res) => {
+    res.json(await listRegulatoryQuarters());
+  });
+
+  app.get("/api/regulatory-updates", requireAuth, async (req, res) => {
+    const { quarter, year, section } = req.query as Record<string, string>;
+    const opts: { quarter?: string; year?: number; section?: "regulatory" | "enforcement" } = {};
+    if (quarter) opts.quarter = quarter;
+    if (year && /^\d+$/.test(year)) opts.year = parseInt(year, 10);
+    if (section === "regulatory" || section === "enforcement") opts.section = section;
+    res.json(await listRegulatoryUpdates(opts));
   });
 
   // ─── Admin: team overview ─────────────────────────────────────────────────

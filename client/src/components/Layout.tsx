@@ -7,6 +7,7 @@ import {
   Library,
   CalendarDays,
   CheckSquare,
+  FileText,
   Settings,
   LogOut,
   Moon,
@@ -22,6 +23,7 @@ const NAV: { href: string; label: string; icon: any; roles?: string[] }[] = [
   { href: "/manual", label: "Compliance Manual", icon: BookOpen },
   { href: "/fca", label: "FCA Handbook", icon: Library },
   { href: "/calendar", label: "Calendar", icon: CalendarDays },
+  { href: "/regulatory-updates", label: "Regulatory Updates", icon: FileText },
   { href: "/attestations", label: "Attestations", icon: CheckSquare },
   { href: "/admin", label: "Admin", icon: Settings, roles: ["admin"] },
 ];
