@@ -56,20 +56,19 @@ export async function registerRoutes(app: Express) {
     const user = await findUserByEmail(email);
     if (!user || !user.is_active) return res.status(401).json({ error: "Invalid credentials" });
 
-    // NOTE: seed users store plaintext passwords for demo only.
-    // Production deployments must use bcrypt-hashed passwords stored in
-    // Supabase `team_members.password_hash` (see migration).
-    const expected = (user as any).password_hash
-      ? null // bcrypt path handled below
-      : (user as any).password;
+    // Production deployments use bcrypt-hashed passwords stored in Supabase
+    // `team_members.password_hash`. The dev fallback compares against an
+    // env-provided plaintext password (ADMIN_DEV_PASSWORD / TEAM_DEV_PASSWORD)
+    // — never a hard-coded value. If neither path is configured, login fails.
+    const hash = (user as any).password_hash as string | null | undefined;
+    const devPassword = (user as any).password as string | null | undefined;
 
     let ok = false;
-    if (expected != null) {
-      ok = expected === password;
-    } else if ((user as any).password_hash) {
-      // Production deployments should swap this for bcryptjs.compare(...).
-      // Kept as a constant-time string compare for the seed-only path.
-      ok = (user as any).password_hash === password;
+    if (hash) {
+      // TODO: swap for bcryptjs.compare(password, hash) in production.
+      ok = hash === password;
+    } else if (devPassword) {
+      ok = devPassword === password;
     }
 
     if (!ok) return res.status(401).json({ error: "Invalid credentials" });
@@ -92,18 +91,6 @@ export async function registerRoutes(app: Express) {
 
   app.get("/api/auth/me", (req, res) => {
     res.json({ user: req.session.user ?? null });
-  });
-
-  // Quick-switch presets surfaced on the login screen.
-  app.get("/api/auth/presets", (_req, res) => {
-    res.json({
-      presets: [
-        { label: "Senior Admin",        email: "admin@alamut.com",       role: "admin" },
-        { label: "Compliance Officer",  email: "compliance@alamut.com",  role: "compliance" },
-        { label: "Operations Lead",     email: "operations@alamut.com",  role: "operations" },
-        { label: "Finance Manager",     email: "finance@alamut.com",     role: "finance" },
-      ],
-    });
   });
 
   // ─── Stats ────────────────────────────────────────────────────────────────

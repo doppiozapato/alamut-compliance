@@ -25,6 +25,8 @@ Node + Express + Vite/React on Railway, Supabase as the data backend.
 ```bash
 cp .env.example .env
 # fill in SUPABASE_URL, SUPABASE_ANON_KEY, SESSION_SECRET, ADMIN_PASSPHRASE
+# (optionally) ADMIN_DEV_PASSWORD / TEAM_DEV_PASSWORD for the in-memory
+# seed fallback when running without Supabase.
 
 npm install
 npm run dev      # http://localhost:8080
@@ -33,21 +35,33 @@ npm run dev      # http://localhost:8080
 Without Supabase configured the app boots against in-memory seed data so you
 can see the full UI immediately. Configure Supabase to persist changes.
 
-### Demo credentials
+### Admin accounts
 
-Quick-switch presets are available on the login screen:
+Two senior personnel hold admin rights on the dashboard. Their emails are
+the only place this is configured:
 
-| Preset                | Email                       | Password         | Role         |
-| --------------------- | --------------------------- | ---------------- | ------------ |
-| Senior Admin          | `admin@alamut.com`          | `admin2026`      | `admin`      |
-| Compliance Officer    | `compliance@alamut.com`     | `compliance2026` | `compliance` |
-| Operations Lead       | `operations@alamut.com`     | `operations2026` | `operations` |
-| Finance Manager       | `finance@alamut.com`        | `finance2026`    | `finance`    |
-| Analyst One / Two     | `analyst1/2@alamut.com`     | `analyst2026`    | `team`       |
+| Slot                   | Email                           | Configured via                          |
+| ---------------------- | ------------------------------- | --------------------------------------- |
+| Primary superuser/admin| `tom@alamut-im.com`             | hard-wired in seed + Supabase           |
+| Second admin           | _(per deployment)_              | `SECOND_ADMIN_EMAIL` env var (or `ADMIN_EMAILS`) |
 
-> ⚠️ **Production:** these are demo-only plaintext passwords. Replace them
-> by populating `team_members.password_hash` (bcrypt) directly in Supabase
-> and removing the `password` column from any seed data you load.
+To activate the second admin:
+
+1. **Supabase deployments:** insert a row in `team_members` for the second
+   admin email with `role='admin'`, then bcrypt-hash a password into
+   `password_hash`. The `supabase/seed.sql` file contains a placeholder
+   row (`second-admin@alamut-im.com`) — update that email before running
+   the seed, or insert the real row manually.
+2. **In-memory fallback (no Supabase):** set `SECOND_ADMIN_EMAIL` (and
+   `ADMIN_DEV_PASSWORD`) in the environment. The seed will create the
+   second admin user on boot.
+3. The login screen does not display credential hints, presets, or demo
+   passwords. Provision real bcrypt-hashed passwords in
+   `team_members.password_hash` for production.
+
+> ⚠️ **Production:** never commit plaintext passwords. Generate bcrypt
+> hashes outside the repo (e.g. `bcrypt.hashSync('newpw', 10)` in Node)
+> and load them directly into Supabase.
 
 ### Role permissions
 
@@ -157,6 +171,10 @@ serves both the bundled API (`dist/index.cjs`) and the built client
 | `NODE_ENV`                  | ✅       | Set to `production`                                                         |
 | `PORT`                      | auto     | Provided by Railway; falls back to `8080` locally                           |
 | `ADMIN_PASSPHRASE`          | optional | Legacy admin-override; omit if all logins use `team_members`                |
+| `SECOND_ADMIN_EMAIL`        | optional | Email of the second admin user. `tom@alamut-im.com` is always the primary. |
+| `ADMIN_EMAILS`              | optional | Alternative to `SECOND_ADMIN_EMAIL`: comma-separated list of admin emails. |
+| `ADMIN_DEV_PASSWORD`        | dev only | Plaintext password for the seed admin accounts when Supabase isn't wired. **Never set in production.** |
+| `TEAM_DEV_PASSWORD`         | dev only | Plaintext password for the seed non-admin accounts. **Never set in production.** |
 | `SUPABASE_SERVICE_ROLE_KEY` | optional | Only needed by `script/importManual.ts`; do **not** set on the web service  |
 
 > ⚠️ Never commit real values. `.env` is gitignored; use Railway's

@@ -3,17 +3,23 @@
 --
 -- Run AFTER `0001_init.sql`. Safe to re-run (uses ON CONFLICT).
 --
--- Production note: replace the demo passwords below with bcrypt hashes
--- generated outside the database (e.g. `bcrypt.hashSync('newpw', 10)` in Node).
+-- Authentication: passwords are NOT seeded here. Populate
+-- `team_members.password_hash` (bcrypt) via your provisioning workflow,
+-- e.g. `bcrypt.hashSync('newpw', 10)` from Node, before issuing logins.
 
 -- ─── Team members ────────────────────────────────────────────────────────────
+-- Two senior personnel hold admin rights:
+--   • tom@alamut-im.com  — primary superuser/admin
+--   • <second-admin>     — placeholder; replace with the real email before
+--                          running this seed in production.
 insert into public.team_members (id, email, full_name, role, is_active) values
-  (1, 'admin@alamut.com',      'Senior Admin',        'admin',      true),
-  (2, 'compliance@alamut.com', 'Compliance Officer',  'compliance', true),
-  (3, 'operations@alamut.com', 'Operations Lead',     'operations', true),
-  (4, 'finance@alamut.com',    'Finance Manager',     'finance',    true),
-  (5, 'analyst1@alamut.com',   'Analyst One',         'team',       true),
-  (6, 'analyst2@alamut.com',   'Analyst Two',         'team',       true)
+  (1, 'tom@alamut-im.com',          'Tom (Superuser)',    'admin',      true),
+  (2, 'second-admin@alamut-im.com', 'Second Admin',       'admin',      true),
+  (3, 'compliance@alamut-im.com',   'Compliance Officer', 'compliance', true),
+  (4, 'operations@alamut-im.com',   'Operations Lead',    'operations', true),
+  (5, 'finance@alamut-im.com',      'Finance Manager',    'finance',    true),
+  (6, 'analyst1@alamut-im.com',     'Analyst One',        'team',       true),
+  (7, 'analyst2@alamut-im.com',     'Analyst Two',        'team',       true)
 on conflict (email) do nothing;
 
 -- ─── Manual chapters (placeholder structure) ─────────────────────────────────

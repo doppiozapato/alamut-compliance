@@ -1,8 +1,10 @@
 // Seed / sample data used when Supabase is not configured (development) and
 // also as the canonical demo content for first-time deployments.
 //
-// All passwords are demo-only — production deployments MUST replace these
-// via the `team_members` table in Supabase (bcrypt-hashed in real deployments).
+// Production deployments MUST replace the seed accounts via the
+// `team_members` table in Supabase (bcrypt-hashed passwords). The dev
+// fallback below reads passwords from environment variables — it never
+// ships hard-coded production credentials.
 
 import type {
   TeamMember,
@@ -14,68 +16,110 @@ import type {
 
 // ─── Team members / credentials ──────────────────────────────────────────────
 //
-// Senior admin accounts (admin role) can view all attestations across the team.
-// The compliance, operations and finance presets are exposed as quick-switch
-// buttons on the login screen for demo convenience.
+// Two senior personnel hold admin rights:
+//   • Primary superuser:  tom@alamut-im.com  (always admin)
+//   • Second admin:       configured via SECOND_ADMIN_EMAIL (or the
+//                         comma-separated ADMIN_EMAILS list)
+//
+// Dev-only passwords are read from env vars (e.g. ADMIN_DEV_PASSWORD). When
+// running without Supabase and without env passwords set, the seed users
+// have no usable password and login will fail — by design, so production
+// deployments must provision real credentials in Supabase.
 
 export interface SeedUser extends TeamMember {
-  password: string; // demo-only plaintext; production stores bcrypt hash
+  password: string | null; // dev-only plaintext (env-driven); null disables login
 }
+
+const PRIMARY_ADMIN_EMAIL = "tom@alamut-im.com";
+
+function parseAdminEmails(): string[] {
+  const list = (process.env.ADMIN_EMAILS ?? "")
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+  const second = (process.env.SECOND_ADMIN_EMAIL ?? "").trim().toLowerCase();
+  const all = new Set<string>([PRIMARY_ADMIN_EMAIL.toLowerCase(), ...list]);
+  if (second) all.add(second);
+  return Array.from(all);
+}
+
+export function isAdminEmail(email: string): boolean {
+  return parseAdminEmails().includes(email.toLowerCase());
+}
+
+const ADMIN_EMAILS = parseAdminEmails();
+const SECOND_ADMIN_EMAIL = ADMIN_EMAILS.find((e) => e !== PRIMARY_ADMIN_EMAIL.toLowerCase()) ?? null;
+
+const ADMIN_DEV_PASSWORD = process.env.ADMIN_DEV_PASSWORD || null;
+const TEAM_DEV_PASSWORD = process.env.TEAM_DEV_PASSWORD || null;
 
 export const SEED_USERS: SeedUser[] = [
   {
     id: 1,
-    email: "admin@alamut.com",
-    full_name: "Senior Admin",
+    email: PRIMARY_ADMIN_EMAIL,
+    full_name: "Tom (Superuser)",
     role: "admin",
     is_active: true,
     created_at: "2026-01-01T00:00:00Z",
-    password: "admin2026",
+    password: ADMIN_DEV_PASSWORD,
   },
+  ...(SECOND_ADMIN_EMAIL
+    ? [
+        {
+          id: 2,
+          email: SECOND_ADMIN_EMAIL,
+          full_name: "Second Admin",
+          role: "admin" as const,
+          is_active: true,
+          created_at: "2026-01-01T00:00:00Z",
+          password: ADMIN_DEV_PASSWORD,
+        },
+      ]
+    : []),
   {
-    id: 2,
-    email: "compliance@alamut.com",
+    id: 3,
+    email: "compliance@alamut-im.com",
     full_name: "Compliance Officer",
     role: "compliance",
     is_active: true,
     created_at: "2026-01-01T00:00:00Z",
-    password: "compliance2026",
+    password: TEAM_DEV_PASSWORD,
   },
   {
-    id: 3,
-    email: "operations@alamut.com",
+    id: 4,
+    email: "operations@alamut-im.com",
     full_name: "Operations Lead",
     role: "operations",
     is_active: true,
     created_at: "2026-01-01T00:00:00Z",
-    password: "operations2026",
+    password: TEAM_DEV_PASSWORD,
   },
   {
-    id: 4,
-    email: "finance@alamut.com",
+    id: 5,
+    email: "finance@alamut-im.com",
     full_name: "Finance Manager",
     role: "finance",
     is_active: true,
     created_at: "2026-01-01T00:00:00Z",
-    password: "finance2026",
+    password: TEAM_DEV_PASSWORD,
   },
   {
-    id: 5,
-    email: "analyst1@alamut.com",
+    id: 6,
+    email: "analyst1@alamut-im.com",
     full_name: "Analyst One",
     role: "team",
     is_active: true,
     created_at: "2026-01-01T00:00:00Z",
-    password: "analyst2026",
+    password: TEAM_DEV_PASSWORD,
   },
   {
-    id: 6,
-    email: "analyst2@alamut.com",
+    id: 7,
+    email: "analyst2@alamut-im.com",
     full_name: "Analyst Two",
     role: "team",
     is_active: true,
     created_at: "2026-01-01T00:00:00Z",
-    password: "analyst2026",
+    password: TEAM_DEV_PASSWORD,
   },
 ];
 
