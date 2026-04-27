@@ -11,6 +11,7 @@ import {
   completeAttestation,
   listAttestationTemplates,
 } from "./store";
+import { supabaseEnabled } from "./supabase";
 import { FCA_MODULES, FCA_CATEGORIES } from "./fcaHandbook";
 import type { Role } from "../shared/schema";
 
@@ -54,7 +55,10 @@ export async function registerRoutes(app: Express) {
     if (!email || !password) return res.status(400).json({ error: "email and password required" });
 
     const user = await findUserByEmail(email);
-    if (!user || !user.is_active) return res.status(401).json({ error: "Invalid credentials" });
+    if (!user || !user.is_active) {
+      console.warn(`[auth] login rejected for ${email}: no active user found (supabaseEnabled=${supabaseEnabled})`);
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
 
     // Production deployments use bcrypt-hashed passwords stored in Supabase
     // `team_members.password_hash`. The dev fallback compares against an
@@ -64,11 +68,28 @@ export async function registerRoutes(app: Express) {
     const devPassword = (user as any).password as string | null | undefined;
 
     let ok = false;
+    let path: "hash" | "dev" | "none" = "none";
     if (hash) {
       // TODO: swap for bcryptjs.compare(password, hash) in production.
       ok = hash === password;
+      path = "hash";
     } else if (devPassword) {
       ok = devPassword === password;
+      path = "dev";
+    }
+
+    if (path === "none") {
+      // Neither a stored hash nor a dev password is configured for this user.
+      // This is the most common cause of a deployment-time "Invalid credentials"
+      // — e.g. Supabase row exists with password_hash=NULL, or the in-memory
+      // seed is active but ADMIN_DEV_PASSWORD / TEAM_DEV_PASSWORD is unset.
+      console.warn(
+        `[auth] login rejected for ${email}: no credential configured ` +
+          `(supabaseEnabled=${supabaseEnabled}, has_password_hash=${!!hash}, has_dev_password=${!!devPassword}). ` +
+          `Set team_members.password_hash in Supabase, or ADMIN_DEV_PASSWORD/TEAM_DEV_PASSWORD in env.`,
+      );
+    } else if (!ok) {
+      console.warn(`[auth] login rejected for ${email}: bad password via ${path} path`);
     }
 
     if (!ok) return res.status(401).json({ error: "Invalid credentials" });

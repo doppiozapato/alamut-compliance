@@ -61,6 +61,15 @@ const SECOND_ADMIN_FULL_NAME =
 const ADMIN_DEV_PASSWORD = process.env.ADMIN_DEV_PASSWORD || null;
 const TEAM_DEV_PASSWORD = process.env.TEAM_DEV_PASSWORD || null;
 
+// Boot-time diagnostic — prints once per process. Helps diagnose deployments
+// where login fails because no credential source is configured for the
+// (otherwise correctly listed) admin accounts. Never logs the values.
+console.log(
+  `[seed] admin emails: ${ADMIN_EMAILS.join(", ")} | ` +
+    `ADMIN_DEV_PASSWORD set: ${!!ADMIN_DEV_PASSWORD} | ` +
+    `TEAM_DEV_PASSWORD set: ${!!TEAM_DEV_PASSWORD}`,
+);
+
 export const SEED_USERS: SeedUser[] = [
   {
     id: 1,
