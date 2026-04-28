@@ -214,6 +214,8 @@ Notes:
    supabase/migrations/0002_manual_sections.sql
    supabase/migrations/0003_regulatory_updates.sql
    supabase/migrations/0004_obligation_submission.sql
+   supabase/migrations/0005_executed_policies.sql
+   supabase/migrations/0006_obligation_submission_rls.sql
    supabase/seed.sql
    ```
    Migration `0004_obligation_submission.sql` adds `submission_comment`,
@@ -226,7 +228,12 @@ Notes:
    require the columns to exist. No further schema changes are required
    for the next-due roll-forward behaviour: the server reuses the existing
    `next_due` and `frequency` columns and advances `next_due` in place
-   each time a submission is recorded.
+   each time a submission is recorded. Migration
+   `0006_obligation_submission_rls.sql` adds the missing INSERT/UPDATE/DELETE
+   row-level-security policies on `compliance_obligations` — without them
+   the anon-key writes the Express server issues for `POST
+   /api/obligations/:id/submit` and `PATCH /api/obligations/:id` were
+   silently rejected and surfaced as a misleading "Not found" response.
    Then push the parsed regulatory updates JSON into the new table:
    ```
    SUPABASE_SERVICE_ROLE_KEY=... npx tsx script/importRegulatoryUpdates.ts
@@ -589,7 +596,8 @@ alamut-compliance/
 │   │   ├── 0002_manual_sections.sql
 │   │   ├── 0003_regulatory_updates.sql
 │   │   ├── 0004_obligation_submission.sql
-│   │   └── 0005_executed_policies.sql
+│   │   ├── 0005_executed_policies.sql
+│   │   └── 0006_obligation_submission_rls.sql
 │   └── seed.sql
 ├── script/
 │   ├── build.ts               # esbuild + vite build

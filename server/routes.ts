@@ -8,6 +8,7 @@ import {
   upsertChapter,
   listSectionsForChapter,
   listObligations,
+  getObligation,
   updateObligation,
   submitObligation,
   listAttestations,
@@ -262,8 +263,15 @@ export async function registerRoutes(app: Express) {
 
   app.patch("/api/obligations/:id", requireRole("admin", "compliance"), async (req, res) => {
     const id = parseInt(String(req.params.id), 10);
+    if (!Number.isFinite(id)) return res.status(400).json({ error: "Invalid id" });
     const updated = await updateObligation(id, req.body);
-    if (!updated) return res.status(404).json({ error: "Not found" });
+    if (!updated) {
+      const exists = await getObligation(id);
+      if (!exists) return res.status(404).json({ error: "Obligation not found" });
+      return res
+        .status(500)
+        .json({ error: "Update rejected — see server logs for details" });
+    }
     res.json(updated);
   });
 
@@ -291,7 +299,26 @@ export async function registerRoutes(app: Express) {
         comment,
         user: { id: requester.id, full_name: requester.full_name },
       });
-      if (!updated) return res.status(404).json({ error: "Not found" });
+      if (!updated) {
+        // Disambiguate "row truly missing" from "update silently rejected"
+        // (e.g. RLS blocking writes) so the operator gets actionable
+        // feedback instead of a misleading 404. Both cases were collapsed
+        // into "Not found" before, which masked the live RLS regression.
+        const exists = await getObligation(id);
+        if (!exists) {
+          console.error(
+            `[obligations] submit id=${id} requested by user=${requester.id} (${requester.role}) — row not present.`,
+          );
+          return res.status(404).json({ error: "Obligation not found" });
+        }
+        console.error(
+          `[obligations] submit id=${id} (title=${exists.title}) requested by user=${requester.id} (${requester.role}) — update returned no row. Likely a missing UPDATE policy on public.compliance_obligations.`,
+        );
+        return res.status(500).json({
+          error:
+            "Submission could not be saved — the obligations table rejected the update. See server logs.",
+        });
+      }
       res.json(updated);
     },
   );

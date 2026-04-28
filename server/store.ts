@@ -250,14 +250,54 @@ export async function updateObligation(id: number, patch: Partial<ComplianceObli
       .update({ ...patch, updated_at: new Date().toISOString() })
       .eq("id", id)
       .select()
-      .single();
-    if (error) return null;
+      .maybeSingle();
+    if (error) {
+      console.error(
+        `[obligations] update id=${id} failed:`,
+        error.code ?? "",
+        error.message ?? error,
+      );
+      return null;
+    }
+    if (!data) {
+      console.error(
+        `[obligations] update id=${id} affected 0 rows — check RLS policies on public.compliance_obligations or that the row exists.`,
+      );
+      return null;
+    }
     return normaliseObligation(data);
   }
   const idx = memObligations.findIndex((o) => o.id === id);
   if (idx < 0) return null;
   memObligations[idx] = { ...memObligations[idx], ...patch, updated_at: new Date().toISOString() };
   return normaliseObligation(memObligations[idx]);
+}
+
+// Fetches a single obligation by id without going through listObligations().
+// Used by submitObligation so a bigint/string id mismatch from PostgREST
+// can't silently break the lookup the way `Array.find(o => o.id === id)`
+// does on strict equality. Returns null if Supabase reports an error or
+// no row.
+export async function getObligation(id: number): Promise<ComplianceObligation | null> {
+  if (supabaseEnabled && supabase) {
+    const { data, error } = await supabase
+      .from("compliance_obligations")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
+    if (error) {
+      console.error(
+        `[obligations] fetch id=${id} failed:`,
+        error.code ?? "",
+        error.message ?? error,
+      );
+      return null;
+    }
+    if (!data) return null;
+    return normaliseObligation(data);
+  }
+  const row = memObligations.find((o) => Number(o.id) === Number(id));
+  return row ? normaliseObligation(row) : null;
 }
 
 // Records a submission against an obligation. When `submitted` is true the
@@ -287,8 +327,13 @@ export async function submitObligation(
     });
   }
   // Need the current row to know the frequency + current next_due.
-  const current = (await listObligations()).find((o) => o.id === id);
-  if (!current) return null;
+  const current = await getObligation(id);
+  if (!current) {
+    console.error(
+      `[obligations] submit id=${id} aborted: row not found (or update would be blocked by RLS).`,
+    );
+    return null;
+  }
   const advanced = nextDueAfter(current.next_due, current.frequency);
   const isAdHoc = current.frequency === "ad_hoc";
   return updateObligation(id, {
