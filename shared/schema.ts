@@ -3,6 +3,71 @@
 
 export type Role = "admin" | "compliance" | "operations" | "finance" | "team";
 
+// Catalogue of sidebar tabs an admin can grant or revoke. The `admin` tab
+// is treated specially: only users with role === "admin" can ever see it,
+// regardless of what's in their tab_permissions array.
+export const TAB_KEYS = [
+  "dashboard",
+  "manual",
+  "policies",
+  "fca",
+  "calendar",
+  "regulatory-updates",
+  "attestations",
+  "admin",
+] as const;
+export type TabKey = (typeof TAB_KEYS)[number];
+
+export const TAB_LABELS: Record<TabKey, string> = {
+  dashboard: "Dashboard",
+  manual: "Compliance Manual",
+  policies: "Policies",
+  fca: "FCA Handbook",
+  calendar: "Compliance Calendar",
+  "regulatory-updates": "Regulatory Updates",
+  attestations: "Attestations",
+  admin: "Admin / Team Oversight",
+};
+
+// Default tab visibility per role. `null` permissions on a TeamMember row
+// resolve to this map at session time, so legacy/seed accounts pick up the
+// right portal without requiring a backfill migration.
+export const DEFAULT_TAB_PERMISSIONS: Record<Role, TabKey[]> = {
+  admin: [
+    "dashboard",
+    "manual",
+    "policies",
+    "fca",
+    "calendar",
+    "regulatory-updates",
+    "attestations",
+    "admin",
+  ],
+  compliance: [
+    "dashboard",
+    "manual",
+    "policies",
+    "fca",
+    "calendar",
+    "regulatory-updates",
+    "attestations",
+  ],
+  operations: ["dashboard", "manual", "policies", "calendar", "attestations"],
+  finance: ["dashboard", "manual", "policies", "calendar", "attestations"],
+  team: ["dashboard", "manual", "attestations"],
+};
+
+export function resolveTabPermissions(
+  role: Role,
+  stored: TabKey[] | null | undefined,
+): TabKey[] {
+  const base = stored && stored.length > 0 ? stored : DEFAULT_TAB_PERMISSIONS[role];
+  // Admin role always retains the admin tab — the Team Oversight screen
+  // would otherwise become locked out if an admin accidentally unticked it.
+  if (role === "admin" && !base.includes("admin")) return [...base, "admin"];
+  return base;
+}
+
 export interface TeamMember {
   id: number;
   email: string;
@@ -10,10 +75,19 @@ export interface TeamMember {
   role: Role;
   is_active: boolean;
   created_at: string;
+  // null when the row hasn't been customised — clients should fall back to
+  // DEFAULT_TAB_PERMISSIONS[role] via resolveTabPermissions().
+  tab_permissions?: TabKey[] | null;
 }
 
 export interface AuthSession {
-  user: { id: number; email: string; full_name: string; role: Role } | null;
+  user: {
+    id: number;
+    email: string;
+    full_name: string;
+    role: Role;
+    tab_permissions: TabKey[];
+  } | null;
 }
 
 export interface ManualChapter {

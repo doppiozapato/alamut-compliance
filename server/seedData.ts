@@ -35,6 +35,7 @@ import { buildSeedExecutedPolicies } from "./executedPoliciesSeed";
 
 export interface SeedUser extends TeamMember {
   password: string | null; // dev-only plaintext (env-driven); null disables login
+  password_hash?: string | null;
 }
 
 const PRIMARY_ADMIN_EMAIL = "tom@alamut-im.com";

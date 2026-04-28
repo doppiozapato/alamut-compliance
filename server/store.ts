@@ -24,6 +24,8 @@ import type {
   RegulatoryUpdate,
   RegulatoryUpdateQuarter,
   ExecutedPolicy,
+  Role,
+  TabKey,
 } from "../shared/schema";
 import { nextDueAfter } from "../shared/schema";
 
@@ -71,15 +73,187 @@ export async function findUserByEmail(email: string): Promise<SeedUser | null> {
   return memUsers.find((u) => u.email.toLowerCase() === email.toLowerCase()) ?? null;
 }
 
+function normaliseTabPermissions(value: unknown): TabKey[] | null {
+  if (!Array.isArray(value)) return null;
+  const cleaned = value.filter((v): v is string => typeof v === "string");
+  if (cleaned.length === 0) return null;
+  return cleaned as TabKey[];
+}
+
+function pickTeamMember(row: any): TeamMember {
+  return {
+    id: row.id,
+    email: row.email,
+    full_name: row.full_name,
+    role: row.role,
+    is_active: row.is_active,
+    created_at: row.created_at,
+    tab_permissions: normaliseTabPermissions(row.tab_permissions),
+  };
+}
+
 export async function listTeamMembers(): Promise<TeamMember[]> {
   if (supabaseEnabled && supabase) {
     const { data } = await supabase
       .from("team_members")
-      .select("id, email, full_name, role, is_active, created_at")
+      .select("id, email, full_name, role, is_active, created_at, tab_permissions")
       .order("id");
-    return (data as TeamMember[]) ?? [];
+    return ((data as any[]) ?? []).map(pickTeamMember);
   }
-  return memUsers.map(({ password: _p, ...u }) => u);
+  return memUsers.map(({ password: _p, password_hash: _h, ...u }: any) => ({
+    id: u.id,
+    email: u.email,
+    full_name: u.full_name,
+    role: u.role,
+    is_active: u.is_active,
+    created_at: u.created_at,
+    tab_permissions: normaliseTabPermissions(u.tab_permissions),
+  }));
+}
+
+export async function getTeamMember(id: number): Promise<TeamMember | null> {
+  if (supabaseEnabled && supabase) {
+    const { data } = await supabase
+      .from("team_members")
+      .select("id, email, full_name, role, is_active, created_at, tab_permissions")
+      .eq("id", id)
+      .maybeSingle();
+    return data ? pickTeamMember(data) : null;
+  }
+  const row = memUsers.find((u) => u.id === id);
+  if (!row) return null;
+  const { password: _p, password_hash: _h, ...rest } = row as any;
+  return {
+    id: rest.id,
+    email: rest.email,
+    full_name: rest.full_name,
+    role: rest.role,
+    is_active: rest.is_active,
+    created_at: rest.created_at,
+    tab_permissions: normaliseTabPermissions(rest.tab_permissions),
+  };
+}
+
+export async function createTeamMember(input: {
+  email: string;
+  full_name: string;
+  role: Role;
+  password_hash: string;
+  tab_permissions: TabKey[] | null;
+  is_active?: boolean;
+}): Promise<TeamMember> {
+  const email = input.email.trim().toLowerCase();
+  const payload = {
+    email,
+    full_name: input.full_name.trim(),
+    role: input.role,
+    password_hash: input.password_hash,
+    tab_permissions: input.tab_permissions,
+    is_active: input.is_active ?? true,
+  };
+  if (supabaseEnabled && supabase) {
+    const { data, error } = await supabase
+      .from("team_members")
+      .insert(payload)
+      .select("id, email, full_name, role, is_active, created_at, tab_permissions")
+      .single();
+    if (error) throw new Error(error.message);
+    return pickTeamMember(data);
+  }
+  if (memUsers.some((u) => u.email.toLowerCase() === email)) {
+    throw new Error("A user with that email already exists");
+  }
+  const row: SeedUser & { password_hash?: string | null; tab_permissions?: TabKey[] | null } = {
+    id: nextId(memUsers as any),
+    email,
+    full_name: payload.full_name,
+    role: payload.role,
+    is_active: payload.is_active,
+    created_at: new Date().toISOString(),
+    password: null,
+    password_hash: payload.password_hash,
+    tab_permissions: payload.tab_permissions,
+  } as any;
+  memUsers.push(row);
+  return {
+    id: row.id,
+    email: row.email,
+    full_name: row.full_name,
+    role: row.role,
+    is_active: row.is_active,
+    created_at: row.created_at,
+    tab_permissions: payload.tab_permissions,
+  };
+}
+
+export async function updateTeamMember(
+  id: number,
+  patch: Partial<{
+    full_name: string;
+    role: Role;
+    is_active: boolean;
+    tab_permissions: TabKey[] | null;
+  }>,
+): Promise<TeamMember | null> {
+  if (supabaseEnabled && supabase) {
+    const { data, error } = await supabase
+      .from("team_members")
+      .update(patch)
+      .eq("id", id)
+      .select("id, email, full_name, role, is_active, created_at, tab_permissions")
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    return data ? pickTeamMember(data) : null;
+  }
+  const idx = memUsers.findIndex((u) => u.id === id);
+  if (idx < 0) return null;
+  const row: any = memUsers[idx];
+  if (patch.full_name !== undefined) row.full_name = patch.full_name;
+  if (patch.role !== undefined) row.role = patch.role;
+  if (patch.is_active !== undefined) row.is_active = patch.is_active;
+  if (patch.tab_permissions !== undefined) row.tab_permissions = patch.tab_permissions;
+  memUsers[idx] = row;
+  return {
+    id: row.id,
+    email: row.email,
+    full_name: row.full_name,
+    role: row.role,
+    is_active: row.is_active,
+    created_at: row.created_at,
+    tab_permissions: normaliseTabPermissions(row.tab_permissions),
+  };
+}
+
+export async function setTeamMemberPasswordHash(
+  id: number,
+  passwordHash: string,
+): Promise<boolean> {
+  if (supabaseEnabled && supabase) {
+    const { data, error } = await supabase
+      .from("team_members")
+      .update({ password_hash: passwordHash })
+      .eq("id", id)
+      .select("id")
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    return !!data;
+  }
+  const idx = memUsers.findIndex((u) => u.id === id);
+  if (idx < 0) return false;
+  (memUsers[idx] as any).password_hash = passwordHash;
+  return true;
+}
+
+export async function emailExists(email: string): Promise<boolean> {
+  if (supabaseEnabled && supabase) {
+    const { data } = await supabase
+      .from("team_members")
+      .select("id")
+      .eq("email", email.toLowerCase())
+      .maybeSingle();
+    return !!data;
+  }
+  return memUsers.some((u) => u.email.toLowerCase() === email.toLowerCase());
 }
 
 // ─── Manual chapters ─────────────────────────────────────────────────────────

@@ -1,8 +1,14 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import bcrypt from "bcryptjs";
+import crypto from "node:crypto";
 import {
   findUserByEmail,
   listTeamMembers,
+  getTeamMember,
+  createTeamMember,
+  updateTeamMember,
+  setTeamMemberPasswordHash,
+  emailExists,
   listChapters,
   getChapter,
   upsertChapter,
@@ -22,12 +28,49 @@ import {
 import { supabaseEnabled } from "./supabase";
 import { FCA_MODULES, FCA_CATEGORIES } from "./fcaHandbook";
 import { SEED_MANUAL_SOURCE } from "./seedData";
-import type { Role } from "../shared/schema";
+import {
+  resolveTabPermissions,
+  TAB_KEYS,
+  type Role,
+  type TabKey,
+} from "../shared/schema";
 
 declare module "express-session" {
   interface SessionData {
-    user?: { id: number; email: string; full_name: string; role: Role };
+    user?: {
+      id: number;
+      email: string;
+      full_name: string;
+      role: Role;
+      tab_permissions: TabKey[];
+    };
   }
+}
+
+const ROLES: Role[] = ["admin", "compliance", "operations", "finance", "team"];
+
+// Generates a strong URL-safe random password (~24 chars from 18 bytes).
+// Used when an admin creates/resets a user without supplying a password.
+// Plaintext is only ever returned in the immediate API response — never
+// stored, never logged.
+function generateStrongPassword(): string {
+  return crypto.randomBytes(18).toString("base64url");
+}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const MIN_PASSWORD_LEN = 10;
+const MAX_PASSWORD_LEN = 128;
+
+function sanitiseTabPermissions(value: unknown): TabKey[] | null {
+  if (value == null) return null;
+  if (!Array.isArray(value)) return null;
+  const out: TabKey[] = [];
+  for (const v of value) {
+    if (typeof v === "string" && (TAB_KEYS as readonly string[]).includes(v)) {
+      if (!out.includes(v as TabKey)) out.push(v as TabKey);
+    }
+  }
+  return out;
 }
 
 function requireAuth(req: Request, res: Response, next: NextFunction) {
@@ -158,11 +201,16 @@ export async function registerRoutes(app: Express) {
 
     if (!ok) return res.status(401).json({ error: "Invalid credentials" });
 
+    const tabPerms = resolveTabPermissions(
+      user.role,
+      (user as any).tab_permissions ?? null,
+    );
     req.session.user = {
       id: user.id,
       email: user.email,
       full_name: user.full_name,
       role: user.role,
+      tab_permissions: tabPerms,
     };
     req.session.save((err) => {
       if (err) return res.status(500).json({ error: "Session save failed" });
@@ -175,7 +223,16 @@ export async function registerRoutes(app: Express) {
   });
 
   app.get("/api/auth/me", (req, res) => {
-    res.json({ user: req.session.user ?? null });
+    const u = req.session.user;
+    if (!u) return res.json({ user: null });
+    // Older sessions (created before this build) may not carry
+    // tab_permissions. Resolve defaults from the role on the fly so the
+    // client can still filter the sidebar correctly without forcing a
+    // re-login.
+    if (!Array.isArray(u.tab_permissions) || u.tab_permissions.length === 0) {
+      u.tab_permissions = resolveTabPermissions(u.role, null);
+    }
+    res.json({ user: u });
   });
 
   // ─── Stats ────────────────────────────────────────────────────────────────
@@ -398,4 +455,140 @@ export async function registerRoutes(app: Express) {
     const id = parseInt(String(req.params.id), 10);
     res.json(await listAttestations({ user_id: id }));
   });
+
+  // ─── Admin: team member lifecycle ─────────────────────────────────────────
+  // Create / update / password reset. Admin-only — compliance has read-only
+  // access to the Team Oversight list above.
+
+  app.post("/api/admin/team", requireRole("admin"), async (req, res) => {
+    try {
+      const body = (req.body || {}) as {
+        email?: string;
+        full_name?: string;
+        role?: string;
+        password?: string;
+        tab_permissions?: unknown;
+      };
+      const email = (body.email ?? "").trim().toLowerCase();
+      const full_name = (body.full_name ?? "").trim();
+      const role = body.role as Role;
+      if (!email || !EMAIL_RE.test(email)) {
+        return res.status(400).json({ error: "Valid email is required" });
+      }
+      if (!full_name || full_name.length < 2) {
+        return res.status(400).json({ error: "Full name is required" });
+      }
+      if (!ROLES.includes(role)) {
+        return res.status(400).json({ error: "Invalid role" });
+      }
+      if (await emailExists(email)) {
+        return res.status(409).json({ error: "A user with that email already exists" });
+      }
+
+      const supplied = typeof body.password === "string" ? body.password : "";
+      let plaintext = supplied;
+      let generated = false;
+      if (!plaintext) {
+        plaintext = generateStrongPassword();
+        generated = true;
+      } else if (plaintext.length < MIN_PASSWORD_LEN || plaintext.length > MAX_PASSWORD_LEN) {
+        return res.status(400).json({
+          error: `Password must be between ${MIN_PASSWORD_LEN} and ${MAX_PASSWORD_LEN} characters`,
+        });
+      }
+
+      const password_hash = await bcrypt.hash(plaintext, 10);
+      const tab_permissions =
+        body.tab_permissions === undefined
+          ? resolveTabPermissions(role, null)
+          : sanitiseTabPermissions(body.tab_permissions);
+
+      const created = await createTeamMember({
+        email,
+        full_name,
+        role,
+        password_hash,
+        tab_permissions,
+      });
+      return res.status(201).json({
+        member: created,
+        password: plaintext,
+        password_generated: generated,
+      });
+    } catch (e: any) {
+      const msg = typeof e?.message === "string" ? e.message : "Failed to create team member";
+      return res.status(400).json({ error: msg });
+    }
+  });
+
+  app.patch("/api/admin/team/:id", requireRole("admin"), async (req, res) => {
+    const id = parseInt(String(req.params.id), 10);
+    if (!Number.isFinite(id)) return res.status(400).json({ error: "Invalid id" });
+    const body = (req.body || {}) as {
+      full_name?: string;
+      role?: string;
+      is_active?: boolean;
+      tab_permissions?: unknown;
+    };
+    const patch: Parameters<typeof updateTeamMember>[1] = {};
+    if (typeof body.full_name === "string") {
+      const fn = body.full_name.trim();
+      if (fn.length < 2) return res.status(400).json({ error: "Full name too short" });
+      patch.full_name = fn;
+    }
+    if (body.role !== undefined) {
+      if (!ROLES.includes(body.role as Role)) {
+        return res.status(400).json({ error: "Invalid role" });
+      }
+      patch.role = body.role as Role;
+    }
+    if (typeof body.is_active === "boolean") patch.is_active = body.is_active;
+    if (body.tab_permissions !== undefined) {
+      patch.tab_permissions = sanitiseTabPermissions(body.tab_permissions);
+    }
+    try {
+      const updated = await updateTeamMember(id, patch);
+      if (!updated) return res.status(404).json({ error: "Team member not found" });
+      return res.json(updated);
+    } catch (e: any) {
+      const msg = typeof e?.message === "string" ? e.message : "Failed to update team member";
+      return res.status(400).json({ error: msg });
+    }
+  });
+
+  app.post(
+    "/api/admin/team/:id/reset-password",
+    requireRole("admin"),
+    async (req, res) => {
+      const id = parseInt(String(req.params.id), 10);
+      if (!Number.isFinite(id)) return res.status(400).json({ error: "Invalid id" });
+      const member = await getTeamMember(id);
+      if (!member) return res.status(404).json({ error: "Team member not found" });
+      const body = (req.body || {}) as { password?: string };
+      const supplied = typeof body.password === "string" ? body.password : "";
+      let plaintext = supplied;
+      let generated = false;
+      if (!plaintext) {
+        plaintext = generateStrongPassword();
+        generated = true;
+      } else if (plaintext.length < MIN_PASSWORD_LEN || plaintext.length > MAX_PASSWORD_LEN) {
+        return res.status(400).json({
+          error: `Password must be between ${MIN_PASSWORD_LEN} and ${MAX_PASSWORD_LEN} characters`,
+        });
+      }
+      try {
+        const password_hash = await bcrypt.hash(plaintext, 10);
+        const ok = await setTeamMemberPasswordHash(id, password_hash);
+        if (!ok) return res.status(404).json({ error: "Team member not found" });
+        return res.json({
+          ok: true,
+          password: plaintext,
+          password_generated: generated,
+        });
+      } catch (e: any) {
+        const msg = typeof e?.message === "string" ? e.message : "Failed to reset password";
+        return res.status(400).json({ error: msg });
+      }
+    },
+  );
 }

@@ -17,17 +17,23 @@ import {
 } from "lucide-react";
 import { cn, ROLE_LABELS } from "@/lib/utils";
 import { logout, type CurrentUser } from "@/lib/auth";
+import type { TabKey } from "@shared/schema";
 import AlamutLogo from "./AlamutLogo";
 
-const NAV: { href: string; label: string; icon: any; roles?: string[] }[] = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/manual", label: "Compliance Manual", icon: BookOpen },
-  { href: "/policies", label: "Policies", icon: Shield },
-  { href: "/fca", label: "FCA Handbook", icon: Library },
-  { href: "/calendar", label: "Calendar", icon: CalendarDays },
-  { href: "/regulatory-updates", label: "Regulatory Updates", icon: FileText },
-  { href: "/attestations", label: "Attestations", icon: CheckSquare },
-  { href: "/admin", label: "Admin", icon: Settings, roles: ["admin"] },
+const NAV: { href: string; label: string; icon: any; tab: TabKey; roles?: string[] }[] = [
+  { href: "/", label: "Dashboard", icon: LayoutDashboard, tab: "dashboard" },
+  { href: "/manual", label: "Compliance Manual", icon: BookOpen, tab: "manual" },
+  { href: "/policies", label: "Policies", icon: Shield, tab: "policies" },
+  { href: "/fca", label: "FCA Handbook", icon: Library, tab: "fca" },
+  { href: "/calendar", label: "Calendar", icon: CalendarDays, tab: "calendar" },
+  {
+    href: "/regulatory-updates",
+    label: "Regulatory Updates",
+    icon: FileText,
+    tab: "regulatory-updates",
+  },
+  { href: "/attestations", label: "Attestations", icon: CheckSquare, tab: "attestations" },
+  { href: "/admin", label: "Admin", icon: Settings, tab: "admin", roles: ["admin"] },
 ];
 
 // Admins (and the compliance officer) see the full oversight portal; everyone
@@ -57,7 +63,11 @@ export default function Layout({ user, children, onLogout }: Props) {
     onLogout();
   }
 
-  const visibleNav = NAV.filter((n) => !n.roles || n.roles.includes(user.role));
+  const allowed = new Set<TabKey>(user.tab_permissions ?? []);
+  const visibleNav = NAV.filter((n) => {
+    if (n.roles && !n.roles.includes(user.role)) return false;
+    return allowed.has(n.tab);
+  });
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">

@@ -187,6 +187,41 @@ Notes:
 - `team_members` rows must already exist (the seed creates them); this
   script only sets `password_hash`.
 
+#### Provisioning users from the Admin / Team Oversight UI
+
+The Admin tab now lets a senior admin create, edit, and reset passwords for
+team members directly. Migration
+`supabase/migrations/0007_team_member_permissions.sql` must be applied
+before these endpoints will succeed against Supabase — it adds the
+`tab_permissions` JSONB column on `team_members` and opens the
+INSERT/UPDATE/DELETE row-level-security policies that the anon-key writes
+require. Authorisation is enforced in the Express layer
+(`requireRole("admin")`) on every mutating endpoint.
+
+Operator notes:
+
+- **Add team member**: form on the Admin / Team Oversight page. Pick a
+  permission profile (Admin / Compliance / Operations / Finance / Team /
+  Custom) — the profile pre-fills role and visible tabs, which can then
+  be hand-tuned. If no password is supplied the server generates a strong
+  random password (Node `crypto.randomBytes`) and returns it once in the
+  response. The UI shows the password with a copy-to-clipboard button and
+  a clear "won't be shown again" warning.
+- **Edit member**: change name/role/active flag and the visible tabs. The
+  "Reset to default" link reapplies `DEFAULT_TAB_PERMISSIONS[role]`. Email
+  is immutable from the UI (rotate accounts by adding a new row).
+- **Reset password**: per-user button. Generates a new bcrypt hash and
+  invalidates the previous credential. The plaintext password is
+  displayed once for the admin to copy and is never logged or persisted.
+- **Sidebar / route guards**: tab visibility is driven entirely by
+  `tab_permissions` (NULL = role default). The client filters the
+  sidebar and redirects direct route access to the user's first allowed
+  tab. The `Admin` tab is additionally gated by `role === "admin"` so a
+  hand-edited row cannot promote a non-admin into the management screen.
+- **Existing accounts** continue to log in via the `ADMIN_DEV_PASSWORD` /
+  `TEAM_DEV_PASSWORD` fallback while their `password_hash` is NULL. New
+  members created from the Admin UI have a bcrypt hash from the start.
+
 ### Role permissions
 
 | Capability                      | admin | compliance | operations | finance | team |
@@ -216,6 +251,7 @@ Notes:
    supabase/migrations/0004_obligation_submission.sql
    supabase/migrations/0005_executed_policies.sql
    supabase/migrations/0006_obligation_submission_rls.sql
+   supabase/migrations/0007_team_member_permissions.sql
    supabase/seed.sql
    ```
    Migration `0004_obligation_submission.sql` adds `submission_comment`,
@@ -234,6 +270,14 @@ Notes:
    the anon-key writes the Express server issues for `POST
    /api/obligations/:id/submit` and `PATCH /api/obligations/:id` were
    silently rejected and surfaced as a misleading "Not found" response.
+   Migration `0007_team_member_permissions.sql` adds a `tab_permissions`
+   JSONB column to `team_members` (NULL means "use the role default" — see
+   `DEFAULT_TAB_PERMISSIONS` in `shared/schema.ts`) and opens
+   INSERT/UPDATE/DELETE row-level-security policies on `team_members` so
+   the Express admin endpoints (`POST /api/admin/team`, `PATCH
+   /api/admin/team/:id`, `POST /api/admin/team/:id/reset-password`) can
+   provision new accounts and write bcrypt password hashes. The Admin /
+   Team Oversight screen surfaces those endpoints for senior admins.
    Then push the parsed regulatory updates JSON into the new table:
    ```
    SUPABASE_SERVICE_ROLE_KEY=... npx tsx script/importRegulatoryUpdates.ts
