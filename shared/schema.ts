@@ -1,7 +1,39 @@
 // Shared TypeScript types mirroring the Supabase schema for the
 // Alamut Compliance Dashboard.
 
+// `Role` keeps `operations` and `finance` as legacy values so existing
+// Supabase rows continue to load and authenticate without a backfill, but
+// the UI only ever offers the three permission profiles below for new or
+// updated members. Legacy roles are normalised to `team`-equivalent
+// permissions at session resolution time.
 export type Role = "admin" | "compliance" | "operations" | "finance" | "team";
+
+// Permission profiles offered in the Admin UI. New rows must be assigned
+// one of these — `operations`/`finance` are not selectable and exist only
+// for backwards compatibility with previously-seeded accounts.
+export const SELECTABLE_ROLES = ["admin", "compliance", "team"] as const;
+export type SelectableRole = (typeof SELECTABLE_ROLES)[number];
+
+export function isSelectableRole(role: string): role is SelectableRole {
+  return (SELECTABLE_ROLES as readonly string[]).includes(role);
+}
+
+// Maps a stored DB role (which may be a legacy `operations` or `finance`)
+// to the role that should drive UI defaults and permission decisions. We
+// treat legacy roles as `team` so they pick up the Team Member profile by
+// default — admins can still upgrade them to compliance via the editor.
+export function normaliseRoleForProfile(role: Role): SelectableRole {
+  if (role === "admin" || role === "compliance" || role === "team") return role;
+  return "team";
+}
+
+export const ROLE_LABELS: Record<Role, string> = {
+  admin: "Admin",
+  compliance: "Compliance",
+  team: "Team Member",
+  operations: "Team Member",
+  finance: "Team Member",
+};
 
 // Catalogue of sidebar tabs an admin can grant or revoke. The `admin` tab
 // is treated specially: only users with role === "admin" can ever see it,
@@ -52,8 +84,10 @@ export const DEFAULT_TAB_PERMISSIONS: Record<Role, TabKey[]> = {
     "regulatory-updates",
     "attestations",
   ],
-  operations: ["dashboard", "manual", "policies", "calendar", "attestations"],
-  finance: ["dashboard", "manual", "policies", "calendar", "attestations"],
+  // Legacy roles mirror `team` defaults — they are no longer selectable
+  // in the UI but existing rows still resolve to a sensible portal.
+  operations: ["dashboard", "manual", "attestations"],
+  finance: ["dashboard", "manual", "attestations"],
   team: ["dashboard", "manual", "attestations"],
 };
 

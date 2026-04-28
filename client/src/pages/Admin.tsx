@@ -14,11 +14,18 @@ import {
   Save,
   X,
 } from "lucide-react";
-import type { Attestation, TeamMember, TabKey, Role } from "@shared/schema";
+import type {
+  Attestation,
+  TeamMember,
+  TabKey,
+  SelectableRole,
+} from "@shared/schema";
 import {
+  SELECTABLE_ROLES,
   TAB_KEYS,
   TAB_LABELS,
   DEFAULT_TAB_PERMISSIONS,
+  normaliseRoleForProfile,
   resolveTabPermissions,
 } from "@shared/schema";
 import { cn, formatDate, ROLE_LABELS, statusBadgeClass } from "@/lib/utils";
@@ -32,17 +39,19 @@ interface TeamSummary extends TeamMember {
   overdue: number;
 }
 
-const ROLES: Role[] = ["admin", "compliance", "operations", "finance", "team"];
+// Only the three current permission profiles are selectable. Legacy
+// `operations` / `finance` rows still load (the backend keeps accepting
+// them on read) but the admin UI surfaces them as "Team Member" and any
+// edit through this UI rewrites them to one of these three.
+const ROLES: readonly SelectableRole[] = SELECTABLE_ROLES;
 
 // A "permission profile" applies a sensible default permission set when
 // the admin picks a role from the dropdown. Custom keeps whatever boxes
 // are currently ticked.
-const PROFILES: { key: Role | "custom"; label: string }[] = [
+const PROFILES: { key: SelectableRole | "custom"; label: string }[] = [
   { key: "admin", label: "Admin (full access)" },
   { key: "compliance", label: "Compliance (oversight)" },
-  { key: "operations", label: "Operations" },
-  { key: "finance", label: "Finance" },
-  { key: "team", label: "Team member" },
+  { key: "team", label: "Team Member" },
   { key: "custom", label: "Custom" },
 ];
 
@@ -170,14 +179,14 @@ function CreateMemberCard({
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
-  const [role, setRole] = useState<Role>("team");
-  const [profile, setProfile] = useState<Role | "custom">("team");
+  const [role, setRole] = useState<SelectableRole>("team");
+  const [profile, setProfile] = useState<SelectableRole | "custom">("team");
   const [perms, setPerms] = useState<TabKey[]>(DEFAULT_TAB_PERMISSIONS.team);
   const [supplyOwn, setSupplyOwn] = useState(false);
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
 
-  function applyProfile(p: Role | "custom") {
+  function applyProfile(p: SelectableRole | "custom") {
     setProfile(p);
     if (p !== "custom") {
       setRole(p);
@@ -279,7 +288,9 @@ function CreateMemberCard({
           </label>
           <select
             value={profile}
-            onChange={(e) => applyProfile(e.target.value as Role | "custom")}
+            onChange={(e) =>
+              applyProfile(e.target.value as SelectableRole | "custom")
+            }
             className="mt-1 w-full px-2 py-1.5 text-xs rounded-md border border-border bg-background focus:outline-none focus:ring-1 focus:ring-ring"
           >
             {PROFILES.map((p) => (
@@ -296,7 +307,7 @@ function CreateMemberCard({
           <select
             value={role}
             onChange={(e) => {
-              setRole(e.target.value as Role);
+              setRole(e.target.value as SelectableRole);
               setProfile("custom");
             }}
             className="mt-1 w-full px-2 py-1.5 text-xs rounded-md border border-border bg-background focus:outline-none focus:ring-1 focus:ring-ring"
@@ -382,7 +393,11 @@ function MemberEditor({
   );
   const [name, setName] = useState(member.full_name);
   const [email, setEmail] = useState(member.email);
-  const [role, setRole] = useState<Role>(member.role);
+  // Legacy `operations` / `finance` rows surface as `team` in the editor —
+  // saving rewrites the DB role to one of the three current profiles.
+  const [role, setRole] = useState<SelectableRole>(
+    normaliseRoleForProfile(member.role),
+  );
   const [perms, setPerms] = useState<TabKey[]>(initialPerms);
   const [active, setActive] = useState(member.is_active);
   const [error, setError] = useState("");
@@ -483,7 +498,7 @@ function MemberEditor({
           </label>
           <select
             value={role}
-            onChange={(e) => setRole(e.target.value as Role)}
+            onChange={(e) => setRole(e.target.value as SelectableRole)}
             className="mt-1 w-full px-2 py-1.5 text-xs rounded-md border border-border bg-background focus:outline-none focus:ring-1 focus:ring-ring"
           >
             {ROLES.map((r) => (

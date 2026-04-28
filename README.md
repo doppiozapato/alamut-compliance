@@ -237,16 +237,49 @@ Smoke-test the email-edit path after a deploy:
    click **Save changes** — the API should respond `409` and the UI
    should surface "A user with that email already exists".
 
-### Role permissions
+### Permission profiles
 
-| Capability                      | admin | compliance | operations | finance | team |
-| ------------------------------- |:-----:|:----------:|:----------:|:-------:|:----:|
-| Read manual / FCA / calendar    | ✅    | ✅         | ✅         | ✅      | ✅   |
-| Complete own attestations       | ✅    | ✅         | ✅         | ✅      | ✅   |
-| Edit manual chapters            | ✅    | ✅         | —          | —       | —    |
-| Update obligation status        | ✅    | ✅         | —          | —       | —    |
-| View ALL team attestations      | ✅    | ✅         | —          | —       | —    |
-| `/admin` team oversight tab     | ✅    | —          | —          | —       | —    |
+The Admin / Team Oversight UI offers exactly three permission profiles:
+
+| Capability                      | Admin | Compliance | Team Member |
+| ------------------------------- |:-----:|:----------:|:-----------:|
+| Read manual / FCA / calendar    | ✅    | ✅         | ✅          |
+| Complete own attestations       | ✅    | ✅         | ✅          |
+| Edit manual chapters            | ✅    | ✅         | —           |
+| Update obligation status        | ✅    | ✅         | —           |
+| View ALL team attestations      | ✅    | ✅         | —           |
+| `/admin` team oversight tab     | ✅    | —          | —           |
+
+Per-member tab visibility can still be customised (Dashboard, Compliance
+Manual, Policies, FCA Handbook, Compliance Calendar, Regulatory Updates,
+Attestations) under any of the three profiles via the visible-tabs grid in
+the Admin editor. The `Admin / Team Oversight` tab is always reserved for
+the Admin profile regardless of the per-member ticks.
+
+#### Legacy `operations` / `finance` rows
+
+Earlier deployments seeded `operations@alamut-im.com` and
+`finance@alamut-im.com` with their own roles. Those rows continue to load
+and authenticate against the existing role-based env passwords, but the
+Admin UI now displays them as **Team Member** and any save through the
+editor rewrites the DB role to one of `admin` / `compliance` / `team`.
+There is no Supabase migration required — the `team_members.role` check
+constraint in `0001_init.sql` still permits the legacy values.
+
+#### Smoke test after deploy
+
+1. Sign in as an admin → Admin / Team Oversight.
+2. Click **Add team member** — the **Permission profile** and **Role**
+   dropdowns must list only "Admin", "Compliance" and "Team Member"
+   (plus "Custom" on the profile dropdown).
+3. **Edit** an existing legacy `operations@…` or `finance@…` member —
+   the Role dropdown should default to "Team Member" and saving should
+   succeed without 400 errors.
+4. Try the API directly: `curl -X PATCH /api/admin/team/<id>
+   -d '{"role":"finance"}'` should return `400 Invalid role`.
+5. Confirm legacy users can still log in with their existing
+   `TEAM_DEV_PASSWORD` (or stored `password_hash`) — login is governed
+   by the DB row, not the UI selector.
 
 ## Supabase
 
@@ -501,7 +534,7 @@ serves both the bundled API (`dist/index.cjs`) and the built client
 | `SECOND_ADMIN_EMAIL`        | optional | Override the second admin email. Defaults to `alice@alamut-im.com`; `tom@alamut-im.com` is always the primary. |
 | `ADMIN_EMAILS`              | optional | Alternative to `SECOND_ADMIN_EMAIL`: comma-separated list of admin emails. |
 | `ADMIN_DEV_PASSWORD`        | see notes | Plaintext password for `admin` / `compliance` users. Used in seed mode and as a fallback for Supabase users whose `password_hash` is NULL. Drop it once every admin row has a bcrypt `password_hash`. |
-| `TEAM_DEV_PASSWORD`         | see notes | Plaintext password for `operations` / `finance` / `team` users. Same fallback semantics as `ADMIN_DEV_PASSWORD`. |
+| `TEAM_DEV_PASSWORD`         | see notes | Plaintext password for `team` users (and any legacy `operations` / `finance` rows still in the DB). Same fallback semantics as `ADMIN_DEV_PASSWORD`. |
 | `SUPABASE_SERVICE_ROLE_KEY` | optional | Only needed by `script/importManual.ts`; do **not** set on the web service  |
 
 > ⚠️ Never commit real values. `.env` is gitignored; use Railway's

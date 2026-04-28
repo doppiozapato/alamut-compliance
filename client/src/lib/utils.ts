@@ -41,10 +41,7 @@ export function statusBadgeClass(status: string): string {
   }
 }
 
-export const ROLE_LABELS: Record<string, string> = {
-  admin: "Senior Admin",
-  compliance: "Compliance",
-  operations: "Operations",
-  finance: "Finance",
-  team: "Team",
-};
+// Re-exported from the shared schema so a single source of truth controls
+// which roles map to which display label (legacy operations/finance rows
+// render as "Team Member"; see SELECTABLE_ROLES in shared/schema.ts).
+export { ROLE_LABELS } from "@shared/schema";

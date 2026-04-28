@@ -30,8 +30,10 @@ import { FCA_MODULES, FCA_CATEGORIES } from "./fcaHandbook";
 import { SEED_MANUAL_SOURCE } from "./seedData";
 import {
   resolveTabPermissions,
+  SELECTABLE_ROLES,
   TAB_KEYS,
   type Role,
+  type SelectableRole,
   type TabKey,
 } from "../shared/schema";
 
@@ -47,7 +49,11 @@ declare module "express-session" {
   }
 }
 
-const ROLES: Role[] = ["admin", "compliance", "operations", "finance", "team"];
+// Roles accepted by the create / update endpoints. The DB still permits
+// the legacy `operations` and `finance` values (see migrations) so
+// existing rows continue to load and authenticate, but new writes coming
+// from the admin UI are restricted to the three current profiles.
+const ROLES: readonly SelectableRole[] = SELECTABLE_ROLES;
 
 // Generates a strong URL-safe random password (~24 chars from 18 bytes).
 // Used when an admin creates/resets a user without supplying a password.
@@ -471,14 +477,14 @@ export async function registerRoutes(app: Express) {
       };
       const email = (body.email ?? "").trim().toLowerCase();
       const full_name = (body.full_name ?? "").trim();
-      const role = body.role as Role;
+      const role = body.role as SelectableRole;
       if (!email || !EMAIL_RE.test(email)) {
         return res.status(400).json({ error: "Valid email is required" });
       }
       if (!full_name || full_name.length < 2) {
         return res.status(400).json({ error: "Full name is required" });
       }
-      if (!ROLES.includes(role)) {
+      if (!(ROLES as readonly string[]).includes(role)) {
         return res.status(400).json({ error: "Invalid role" });
       }
       if (await emailExists(email)) {
@@ -555,7 +561,7 @@ export async function registerRoutes(app: Express) {
       patch.full_name = fn;
     }
     if (body.role !== undefined) {
-      if (!ROLES.includes(body.role as Role)) {
+      if (!(ROLES as readonly string[]).includes(body.role as string)) {
         return res.status(400).json({ error: "Invalid role" });
       }
       patch.role = body.role as Role;
