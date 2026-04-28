@@ -3,11 +3,14 @@ import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { BookOpen, Search, FileText, ChevronRight } from "lucide-react";
 import type { ManualChapter, ManualSourcePdf } from "@shared/schema";
+import { logout } from "@/lib/auth";
 
 export default function Manual() {
-  const { data: chapters = [], isLoading, isError } = useQuery<ManualChapter[]>({
+  const { data: chapters = [], isLoading, isError, error } = useQuery<ManualChapter[]>({
     queryKey: ["/api/manual/chapters"],
   });
+  const isUnauthenticated =
+    error instanceof Error && error.message === "UNAUTHENTICATED";
   const { data: source } = useQuery<ManualSourcePdf>({
     queryKey: ["/api/manual/source"],
   });
@@ -66,10 +69,41 @@ export default function Manual() {
 
       {isLoading ? (
         <p className="text-xs text-muted-foreground py-8">Loading manual…</p>
+      ) : isUnauthenticated ? (
+        <div className="py-8 max-w-md">
+          <p className="text-xs text-foreground mb-1">Your session has expired.</p>
+          <p className="text-xs text-muted-foreground mb-3">
+            Please sign in again to view the Compliance Manual.
+          </p>
+          <button
+            type="button"
+            onClick={async () => {
+              // Calling logout() clears the server cookie and the in-memory
+              // user — App.tsx's session-expired listener will already have
+              // taken us back to the Login screen, but this guarantees a
+              // clean slate even when that listener is bypassed.
+              await logout();
+              window.location.reload();
+            }}
+            className="text-xs font-medium px-3 py-1.5 rounded-md bg-primary text-primary-foreground hover:opacity-90 transition-opacity"
+          >
+            Sign in again
+          </button>
+        </div>
       ) : isError ? (
-        <p className="text-xs text-destructive py-8">
-          Failed to load chapters. Refresh, or sign in again if your session has expired.
-        </p>
+        <div className="py-8 max-w-md">
+          <p className="text-xs text-destructive mb-2">
+            Failed to load chapters. Please refresh, or sign in again if your session
+            has expired.
+          </p>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="text-xs font-medium px-3 py-1.5 rounded-md border border-border hover:bg-accent transition-colors"
+          >
+            Refresh
+          </button>
+        </div>
       ) : chapters.length === 0 ? (
         <p className="text-xs text-muted-foreground py-8">
           No chapters available yet. The compliance manual will appear here once it has been

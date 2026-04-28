@@ -5,9 +5,10 @@ import AlamutLogo from "@/components/AlamutLogo";
 
 interface Props {
   onAuth: (u: CurrentUser) => void;
+  sessionExpired?: boolean;
 }
 
-export default function Login({ onAuth }: Props) {
+export default function Login({ onAuth, sessionExpired }: Props) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -43,6 +44,12 @@ export default function Login({ onAuth }: Props) {
           <p className="text-xs text-muted-foreground mb-5">
             Use your team credentials to access the Compliance Dashboard.
           </p>
+
+          {sessionExpired && (
+            <div className="mb-4 px-3 py-2 rounded-md border border-amber-500/40 bg-amber-500/10 text-[11px] text-amber-600 dark:text-amber-400">
+              Your session has expired. Please sign in again to continue.
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-3">
             <div className="space-y-1.5">

@@ -444,6 +444,29 @@ Fix — already applied on `main`. Pull the latest migrations and re-run them
 in the Supabase SQL Editor. No action is needed if you are deploying from
 the current `main`.
 
+#### Compliance Manual shows "Failed to load chapters"
+
+Symptom — the user opens **Compliance Manual** and sees:
+
+> Failed to load chapters. Refresh, or sign in again if your session has expired.
+
+Cause — `/api/manual/chapters` requires an authenticated session, and the
+browser session cookie has expired or been cleared. The browser is still
+serving the cached SPA bundle inside the admin shell, so the user looks
+"signed in" but every API request comes back `401 Not Authenticated`.
+
+Fix — already applied on `main`. The current build:
+
+* Detects any `401` from `/api/*` (other than the auth endpoints themselves)
+  and drops the cached user, returning the user to the **Sign in** screen
+  with a "Your session has expired" banner.
+* On the Manual page itself, an unauthenticated response renders an
+  explicit "Your session has expired" message with a **Sign in again**
+  button that clears the cookie and reloads.
+
+If you are running an older build, simply refresh the page and sign in
+again — there is no data loss; the manual is still in Supabase.
+
 ### Healthcheck
 
 `GET /api/health` is unauthenticated and returns:

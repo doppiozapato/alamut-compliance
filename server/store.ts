@@ -80,18 +80,69 @@ export async function listTeamMembers(): Promise<TeamMember[]> {
 
 // ─── Manual chapters ─────────────────────────────────────────────────────────
 
+// Parse a chapter "number" string (e.g. "1", "2.1", "Appendix A") into a
+// sortable tuple so chapters with the same order_index — or chapters whose
+// order_index was not populated by the importer — still surface in the
+// expected reading order.
+function chapterSortKey(c: { number: string; order_index?: number | null; kind?: string }): [number, number, string] {
+  const order = c.order_index ?? 0;
+  const m = (c.number ?? "").match(/^(\d+)/);
+  const numeric = m ? parseInt(m[1], 10) : Number.MAX_SAFE_INTEGER;
+  return [order || numeric, numeric, c.number ?? ""];
+}
+
+// The Supabase response can in principle return rows with NULL on text[]
+// columns (e.g. if the column was added later without a default backfill).
+// Normalising here means the UI never has to guard against `c.fca_refs.map`
+// throwing and the response shape is stable across seed/Supabase modes.
+function normaliseChapter(c: any): ManualChapter {
+  return {
+    ...c,
+    // Some legacy/imported rows may carry alternate field names — accept
+    // those as fallbacks so a Supabase row with `chapter_number`/`sort_order`
+    // (should one ever appear) still maps cleanly to the expected shape.
+    number: c.number ?? c.chapter_number ?? "",
+    order_index: c.order_index ?? c.sort_order ?? 0,
+    fca_refs: Array.isArray(c.fca_refs) ? c.fca_refs : [],
+    tags: Array.isArray(c.tags) ? c.tags : [],
+    kind: c.kind ?? "chapter",
+  };
+}
+
 export async function listChapters(): Promise<ManualChapter[]> {
   if (supabaseEnabled && supabase) {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("manual_chapters")
-      .select("*")
-      .order("order_index");
-    return (data as ManualChapter[]) ?? [];
+      .select(
+        "id, number, title, slug, summary, parent_id, order_index, version, effective_date, owner, fca_refs, tags, updated_at, kind, start_page, end_page, source_pdf",
+      )
+      .order("order_index", { ascending: true });
+    if (error) {
+      console.warn(`[store] manual_chapters query failed: ${error.message}`);
+      return [];
+    }
+    const rows = (data ?? []).map(normaliseChapter);
+    // `content` is intentionally omitted from the list view — clients fetch
+    // one chapter at a time via getChapter(slug) when they need full text.
+    return rows
+      .map((r) => ({ ...r, content: "" }))
+      .sort((a, b) => {
+        const ka = chapterSortKey(a);
+        const kb = chapterSortKey(b);
+        if (ka[0] !== kb[0]) return ka[0] - kb[0];
+        if (ka[1] !== kb[1]) return ka[1] - kb[1];
+        return ka[2].localeCompare(kb[2]);
+      });
   }
-  // Strip heavy `content` from the list view — clients fetch one chapter at a
-  // time via getChapter(slug) when they need full text.
   return [...memChapters]
-    .sort((a, b) => a.order_index - b.order_index)
+    .map(normaliseChapter)
+    .sort((a, b) => {
+      const ka = chapterSortKey(a);
+      const kb = chapterSortKey(b);
+      if (ka[0] !== kb[0]) return ka[0] - kb[0];
+      if (ka[1] !== kb[1]) return ka[1] - kb[1];
+      return ka[2].localeCompare(kb[2]);
+    })
     .map((c) => ({ ...c, content: "" }));
 }
 
@@ -103,7 +154,7 @@ export async function getChapter(slug: string): Promise<ManualChapter | null> {
       .eq("slug", slug)
       .maybeSingle();
     if (!data) return null;
-    const chapter = data as ManualChapter;
+    const chapter = normaliseChapter(data);
     const { data: secs } = await supabase
       .from("manual_sections")
       .select("*")
@@ -115,7 +166,7 @@ export async function getChapter(slug: string): Promise<ManualChapter | null> {
   const chapter = memChapters.find((c) => c.slug === slug);
   if (!chapter) return null;
   return {
-    ...chapter,
+    ...normaliseChapter(chapter),
     sections: memSections
       .filter((s) => s.chapter_id === chapter.id)
       .sort((a, b) => a.order_index - b.order_index),
