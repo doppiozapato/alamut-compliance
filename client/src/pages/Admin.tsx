@@ -381,6 +381,7 @@ function MemberEditor({
     [member],
   );
   const [name, setName] = useState(member.full_name);
+  const [email, setEmail] = useState(member.email);
   const [role, setRole] = useState<Role>(member.role);
   const [perms, setPerms] = useState<TabKey[]>(initialPerms);
   const [active, setActive] = useState(member.is_active);
@@ -391,6 +392,7 @@ function MemberEditor({
   const save = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("PATCH", `/api/admin/team/${member.id}`, {
+        email: email.trim().toLowerCase(),
         full_name: name,
         role,
         is_active: active,
@@ -460,13 +462,20 @@ function MemberEditor({
         </div>
         <div>
           <label className="text-[10px] uppercase tracking-wider text-muted-foreground">
-            Email
+            Email (login username)
           </label>
           <input
-            value={member.email}
-            disabled
-            className="mt-1 w-full px-2 py-1.5 text-xs rounded-md border border-border bg-secondary/40 text-muted-foreground"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            autoComplete="off"
+            spellCheck={false}
+            className="mt-1 w-full px-2 py-1.5 text-xs rounded-md border border-border bg-background focus:outline-none focus:ring-1 focus:ring-ring"
           />
+          <p className="mt-1 text-[10px] text-muted-foreground">
+            This is the address the user signs in with. Changing it updates
+            their login username — the existing password is preserved.
+          </p>
         </div>
         <div>
           <label className="text-[10px] uppercase tracking-wider text-muted-foreground">

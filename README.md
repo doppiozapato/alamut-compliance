@@ -207,9 +207,13 @@ Operator notes:
   random password (Node `crypto.randomBytes`) and returns it once in the
   response. The UI shows the password with a copy-to-clipboard button and
   a clear "won't be shown again" warning.
-- **Edit member**: change name/role/active flag and the visible tabs. The
-  "Reset to default" link reapplies `DEFAULT_TAB_PERMISSIONS[role]`. Email
-  is immutable from the UI (rotate accounts by adding a new row).
+- **Edit member**: change email/name/role/active flag and the visible tabs.
+  The email field is the user's login username — when an admin updates it
+  the existing `password_hash` is preserved, and the next sign-in must use
+  the new address (the same `@alamut-im` shorthand normalisation applies on
+  login). The server validates the format, lowercases/trims it, refuses
+  duplicates with HTTP 409, and treats an unchanged value as a no-op. The
+  "Reset to default" link reapplies `DEFAULT_TAB_PERMISSIONS[role]`.
 - **Reset password**: per-user button. Generates a new bcrypt hash and
   invalidates the previous credential. The plaintext password is
   displayed once for the admin to copy and is never logged or persisted.
@@ -221,6 +225,17 @@ Operator notes:
 - **Existing accounts** continue to log in via the `ADMIN_DEV_PASSWORD` /
   `TEAM_DEV_PASSWORD` fallback while their `password_hash` is NULL. New
   members created from the Admin UI have a bcrypt hash from the start.
+
+Smoke-test the email-edit path after a deploy:
+
+1. Sign in as an admin. Open Admin / Team Oversight, click **Edit** on a
+   non-admin member, change the `Email (login username)` field to a new
+   address, and click **Save changes**.
+2. Sign out, sign in with the new address using the same password — the
+   login should succeed without any password reset.
+3. Re-edit the member, set the email to another existing user's address,
+   click **Save changes** — the API should respond `409` and the UI
+   should surface "A user with that email already exists".
 
 ### Role permissions
 
@@ -276,7 +291,10 @@ Operator notes:
    INSERT/UPDATE/DELETE row-level-security policies on `team_members` so
    the Express admin endpoints (`POST /api/admin/team`, `PATCH
    /api/admin/team/:id`, `POST /api/admin/team/:id/reset-password`) can
-   provision new accounts and write bcrypt password hashes. The Admin /
+   provision new accounts, rotate the login email (the `team_members.email`
+   `unique not null` constraint set up in `0001_init.sql` is what enforces
+   the duplicate-email check — no further migration is required to enable
+   email edits), and write bcrypt password hashes. The Admin /
    Team Oversight screen surfaces those endpoints for senior admins.
    Then push the parsed regulatory updates JSON into the new table:
    ```

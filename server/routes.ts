@@ -525,12 +525,30 @@ export async function registerRoutes(app: Express) {
     const id = parseInt(String(req.params.id), 10);
     if (!Number.isFinite(id)) return res.status(400).json({ error: "Invalid id" });
     const body = (req.body || {}) as {
+      email?: string;
       full_name?: string;
       role?: string;
       is_active?: boolean;
       tab_permissions?: unknown;
     };
     const patch: Parameters<typeof updateTeamMember>[1] = {};
+    if (typeof body.email === "string") {
+      const email = body.email.trim().toLowerCase();
+      if (!email || !EMAIL_RE.test(email)) {
+        return res.status(400).json({ error: "Valid email is required" });
+      }
+      // Allow no-op; only check duplicates when actually changing.
+      const current = await getTeamMember(id);
+      if (!current) return res.status(404).json({ error: "Team member not found" });
+      if (email !== current.email.toLowerCase()) {
+        if (await emailExists(email, id)) {
+          return res
+            .status(409)
+            .json({ error: "A user with that email already exists" });
+        }
+        patch.email = email;
+      }
+    }
     if (typeof body.full_name === "string") {
       const fn = body.full_name.trim();
       if (fn.length < 2) return res.status(400).json({ error: "Full name too short" });
@@ -549,9 +567,22 @@ export async function registerRoutes(app: Express) {
     try {
       const updated = await updateTeamMember(id, patch);
       if (!updated) return res.status(404).json({ error: "Team member not found" });
+      // If the admin updated their own email, refresh the session payload so
+      // subsequent requests reflect the new login identifier.
+      if (patch.email && req.session.user?.id === id) {
+        req.session.user.email = updated.email;
+      }
       return res.json(updated);
     } catch (e: any) {
       const msg = typeof e?.message === "string" ? e.message : "Failed to update team member";
+      // Postgres unique violation surfaces as 23505 — translate to 409 so the
+      // UI can render the same duplicate-email message as create.
+      if (typeof e?.code === "string" && e.code === "23505") {
+        return res.status(409).json({ error: "A user with that email already exists" });
+      }
+      if (/duplicate key|unique constraint|already exists/i.test(msg)) {
+        return res.status(409).json({ error: "A user with that email already exists" });
+      }
       return res.status(400).json({ error: msg });
     }
   });

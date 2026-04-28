@@ -189,16 +189,22 @@ export async function createTeamMember(input: {
 export async function updateTeamMember(
   id: number,
   patch: Partial<{
+    email: string;
     full_name: string;
     role: Role;
     is_active: boolean;
     tab_permissions: TabKey[] | null;
   }>,
 ): Promise<TeamMember | null> {
+  // Normalise email patches consistently with createTeamMember and login.
+  const normalised: typeof patch = { ...patch };
+  if (normalised.email !== undefined) {
+    normalised.email = normalised.email.trim().toLowerCase();
+  }
   if (supabaseEnabled && supabase) {
     const { data, error } = await supabase
       .from("team_members")
-      .update(patch)
+      .update(normalised)
       .eq("id", id)
       .select("id, email, full_name, role, is_active, created_at, tab_permissions")
       .maybeSingle();
@@ -208,10 +214,11 @@ export async function updateTeamMember(
   const idx = memUsers.findIndex((u) => u.id === id);
   if (idx < 0) return null;
   const row: any = memUsers[idx];
-  if (patch.full_name !== undefined) row.full_name = patch.full_name;
-  if (patch.role !== undefined) row.role = patch.role;
-  if (patch.is_active !== undefined) row.is_active = patch.is_active;
-  if (patch.tab_permissions !== undefined) row.tab_permissions = patch.tab_permissions;
+  if (normalised.email !== undefined) row.email = normalised.email;
+  if (normalised.full_name !== undefined) row.full_name = normalised.full_name;
+  if (normalised.role !== undefined) row.role = normalised.role;
+  if (normalised.is_active !== undefined) row.is_active = normalised.is_active;
+  if (normalised.tab_permissions !== undefined) row.tab_permissions = normalised.tab_permissions;
   memUsers[idx] = row;
   return {
     id: row.id,
@@ -244,16 +251,17 @@ export async function setTeamMemberPasswordHash(
   return true;
 }
 
-export async function emailExists(email: string): Promise<boolean> {
+export async function emailExists(email: string, excludeId?: number): Promise<boolean> {
+  const normalised = email.trim().toLowerCase();
   if (supabaseEnabled && supabase) {
-    const { data } = await supabase
-      .from("team_members")
-      .select("id")
-      .eq("email", email.toLowerCase())
-      .maybeSingle();
+    let q = supabase.from("team_members").select("id").eq("email", normalised);
+    if (excludeId != null) q = q.neq("id", excludeId);
+    const { data } = await q.maybeSingle();
     return !!data;
   }
-  return memUsers.some((u) => u.email.toLowerCase() === email.toLowerCase());
+  return memUsers.some(
+    (u) => u.email.toLowerCase() === normalised && (excludeId == null || u.id !== excludeId),
+  );
 }
 
 // ─── Manual chapters ─────────────────────────────────────────────────────────
