@@ -237,6 +237,50 @@ Smoke-test the email-edit path after a deploy:
    click **Save changes** — the API should respond `409` and the UI
    should surface "A user with that email already exists".
 
+#### Per-user attestation history
+
+The Admin / Team Oversight row exposes a **History** action alongside
+**Edit**. It opens a per-user attestation panel that an admin can use to
+audit the team member's sign-offs without leaving the oversight screen.
+The panel shows:
+
+- **Summary tiles**: total, completed, pending, overdue, and "due ≤30d"
+  (upcoming) counts. Overdue is computed live against today so a row with
+  a stale `pending` status whose `due_date` has passed is surfaced as
+  overdue regardless of what's persisted.
+- **Outstanding section**: every non-completed attestation, sorted by
+  due date with a relative "N days until due" / "N days overdue" hint,
+  category, FCA references, and any description text from the template.
+- **Completed section**: every completed attestation, sorted newest
+  first, showing the original `due_date`, the `completed_at`
+  acknowledgement timestamp, and the user's free-text comment if one
+  was captured.
+
+The panel is read-only — admins cannot complete attestations on behalf
+of a user from this view. It reuses the existing
+`GET /api/admin/team/:id/attestations` endpoint (admin-only,
+`requireRole("admin")`); compliance keeps read-only access via
+`GET /api/attestations?user_id=...`. No Supabase migration is required —
+the `attestations` columns (`due_date`, `status`, `completed_at`,
+`comment`, `fca_refs`) from `0001_init.sql` are sufficient.
+
+Smoke-test the attestation-history view after a deploy:
+
+1. Sign in as an admin. Open Admin / Team Oversight and click **History**
+   on any team member — the panel should load with the five summary
+   tiles populated and an "Outstanding" / "Completed" split underneath.
+2. Pick a user with at least one pending row whose `due_date` is in the
+   past (or temporarily change one in Supabase) — that row should
+   surface in **Outstanding** with the **overdue** badge and an
+   "N days overdue" hint, even if the stored `status` is still `pending`.
+3. Have a team member complete an attestation with a comment from their
+   own portal, then refresh History — the row should move to
+   **Completed**, show the completion timestamp, and render the comment
+   in italic alongside the message-square icon.
+4. As a compliance user (not admin), `GET /api/admin/team/<id>/attestations`
+   should return `403`; the same data should be reachable via
+   `GET /api/attestations?user_id=<id>`.
+
 ### Permission profiles
 
 The Admin / Team Oversight UI offers exactly three permission profiles:

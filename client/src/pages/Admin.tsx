@@ -13,6 +13,10 @@ import {
   ShieldCheck,
   Save,
   X,
+  ClipboardList,
+  Clock,
+  CalendarDays,
+  MessageSquare,
 } from "lucide-react";
 import type {
   Attestation,
@@ -28,7 +32,7 @@ import {
   normaliseRoleForProfile,
   resolveTabPermissions,
 } from "@shared/schema";
-import { cn, formatDate, ROLE_LABELS, statusBadgeClass } from "@/lib/utils";
+import { cn, daysUntil, formatDate, ROLE_LABELS, statusBadgeClass } from "@/lib/utils";
 import { getCurrentUser } from "@/lib/auth";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -605,6 +609,36 @@ function MemberEditor({
   );
 }
 
+function StatTile({
+  label,
+  value,
+  tone,
+  icon,
+}: {
+  label: string;
+  value: number;
+  tone: "neutral" | "good" | "warn" | "bad";
+  icon: React.ReactNode;
+}) {
+  const toneClass =
+    tone === "good"
+      ? "text-emerald-600 dark:text-emerald-400"
+      : tone === "warn"
+        ? "text-amber-600 dark:text-amber-400"
+        : tone === "bad"
+          ? "text-red-600 dark:text-red-400"
+          : "text-foreground";
+  return (
+    <div className="bg-card border border-border rounded-lg px-3 py-2.5">
+      <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground">
+        {icon}
+        <span>{label}</span>
+      </div>
+      <p className={cn("text-lg font-semibold mt-0.5", toneClass)}>{value}</p>
+    </div>
+  );
+}
+
 export default function Admin() {
   const user = getCurrentUser();
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -636,6 +670,36 @@ export default function Admin() {
 
   if (selectedId) {
     const member = team.find((t) => t.id === selectedId);
+    // The stored `status` for non-completed rows can lag behind the wall
+    // clock — a `pending` row whose due_date is in the past should be
+    // surfaced as overdue regardless of what's persisted, so admins see
+    // the live state without waiting for a backend sweep.
+    const effectiveStatus = (a: Attestation): "completed" | "overdue" | "pending" => {
+      if (a.status === "completed") return "completed";
+      if (a.status === "overdue") return "overdue";
+      return daysUntil(a.due_date) < 0 ? "overdue" : "pending";
+    };
+    const total = detail.length;
+    const completed = detail.filter((a) => effectiveStatus(a) === "completed").length;
+    const overdue = detail.filter((a) => effectiveStatus(a) === "overdue").length;
+    const pending = detail.filter((a) => effectiveStatus(a) === "pending").length;
+    // "Upcoming" is the subset of pending due within the next 30 days —
+    // a useful at-a-glance horizon for the admin without overwhelming
+    // the panel with longer-term commitments.
+    const upcoming = detail.filter((a) => {
+      if (effectiveStatus(a) !== "pending") return false;
+      const d = daysUntil(a.due_date);
+      return d >= 0 && d <= 30;
+    }).length;
+    const outstanding = detail
+      .filter((a) => effectiveStatus(a) !== "completed")
+      .sort((x, y) => x.due_date.localeCompare(y.due_date));
+    const completedRows = detail
+      .filter((a) => effectiveStatus(a) === "completed")
+      .sort((x, y) =>
+        (y.completed_at ?? "").localeCompare(x.completed_at ?? ""),
+      );
+
     return (
       <div className="px-6 py-6 max-w-4xl mx-auto">
         <button
@@ -645,45 +709,128 @@ export default function Admin() {
           <ArrowLeft className="w-3 h-3" /> Back to team
         </button>
         {member && (
-          <div className="mb-5">
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
-              {ROLE_LABELS[member.role] ?? member.role}
-            </p>
-            <h1 className="text-base font-semibold mt-0.5">{member.full_name}</h1>
-            <p className="text-xs text-muted-foreground">{member.email}</p>
+          <div className="mb-5 flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground inline-flex items-center gap-1.5">
+                <ClipboardList className="w-3 h-3" /> Attestation history
+              </p>
+              <h1 className="text-base font-semibold mt-0.5">{member.full_name}</h1>
+              <p className="text-xs text-muted-foreground">
+                {member.email} · {ROLE_LABELS[member.role] ?? member.role}
+                {!member.is_active && (
+                  <span className="ml-1 text-[10px] uppercase text-red-500">(inactive)</span>
+                )}
+              </p>
+            </div>
           </div>
         )}
-        <div className="space-y-2">
-          {detail.length === 0 ? (
-            <p className="text-xs text-muted-foreground">No attestations.</p>
-          ) : (
-            detail.map((a) => (
-              <div
-                key={a.id}
-                className="bg-card border border-border rounded-lg px-4 py-3 flex items-start justify-between gap-3"
-              >
-                <div className="min-w-0">
-                  <p className="text-xs font-medium">{a.topic}</p>
-                  <p className="text-[10px] text-muted-foreground">
-                    {a.category} · due {formatDate(a.due_date)}
-                    {a.completed_at ? ` · completed ${formatDate(a.completed_at)}` : ""}
-                  </p>
-                  {a.comment && (
-                    <p className="text-[11px] text-muted-foreground italic mt-1">"{a.comment}"</p>
-                  )}
-                </div>
-                <span
-                  className={cn(
-                    "text-[9px] uppercase px-1.5 py-0.5 rounded border whitespace-nowrap",
-                    statusBadgeClass(a.status),
-                  )}
-                >
-                  {a.status}
-                </span>
-              </div>
-            ))
-          )}
+
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-5">
+          <StatTile label="Total" value={total} tone="neutral" icon={<ClipboardList className="w-3 h-3" />} />
+          <StatTile label="Completed" value={completed} tone="good" icon={<CheckCircle2 className="w-3 h-3" />} />
+          <StatTile label="Pending" value={pending} tone="warn" icon={<Clock className="w-3 h-3" />} />
+          <StatTile label="Overdue" value={overdue} tone="bad" icon={<AlertTriangle className="w-3 h-3" />} />
+          <StatTile label="Due ≤30d" value={upcoming} tone="warn" icon={<CalendarDays className="w-3 h-3" />} />
         </div>
+
+        {detail.length === 0 ? (
+          <div className="bg-card border border-border rounded-lg px-4 py-6 text-center text-xs text-muted-foreground">
+            No attestations on record for this team member.
+          </div>
+        ) : (
+          <>
+            <section className="mb-6">
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2">
+                Outstanding ({outstanding.length})
+              </p>
+              {outstanding.length === 0 ? (
+                <div className="bg-card border border-border rounded-lg px-4 py-4 text-center text-[11px] text-muted-foreground">
+                  No outstanding attestations — fully up to date.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {outstanding.map((a) => {
+                    const eff = effectiveStatus(a);
+                    const d = daysUntil(a.due_date);
+                    const dueLabel =
+                      eff === "overdue"
+                        ? `${Math.abs(d)} day${Math.abs(d) === 1 ? "" : "s"} overdue`
+                        : d === 0
+                          ? "due today"
+                          : `${d} day${d === 1 ? "" : "s"} until due`;
+                    return (
+                      <div
+                        key={a.id}
+                        className="bg-card border border-border rounded-lg px-4 py-3"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-xs font-medium">{a.topic}</p>
+                            <p className="text-[10px] text-muted-foreground mt-0.5">
+                              {a.category} · due {formatDate(a.due_date)} · {dueLabel}
+                              {a.fca_refs.length > 0 && ` · ${a.fca_refs.join(", ")}`}
+                            </p>
+                            {a.description && (
+                              <p className="text-[11px] text-muted-foreground mt-1">
+                                {a.description}
+                              </p>
+                            )}
+                          </div>
+                          <span
+                            className={cn(
+                              "text-[9px] uppercase px-1.5 py-0.5 rounded border whitespace-nowrap self-start",
+                              statusBadgeClass(eff),
+                            )}
+                          >
+                            {eff}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+
+            <section>
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2">
+                Completed ({completedRows.length})
+              </p>
+              {completedRows.length === 0 ? (
+                <p className="text-[11px] text-muted-foreground py-2">
+                  No completed attestations on record yet.
+                </p>
+              ) : (
+                <div className="space-y-1.5">
+                  {completedRows.map((a) => (
+                    <div
+                      key={a.id}
+                      className="bg-card border border-border rounded-lg px-4 py-2.5"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-[11px] font-medium">{a.topic}</p>
+                          <p className="text-[10px] text-muted-foreground mt-0.5">
+                            {a.category} · due {formatDate(a.due_date)} · completed{" "}
+                            {formatDate(a.completed_at)}
+                            {a.fca_refs.length > 0 && ` · ${a.fca_refs.join(", ")}`}
+                          </p>
+                          {a.comment && (
+                            <p className="text-[11px] text-muted-foreground mt-1 italic inline-flex items-start gap-1">
+                              <MessageSquare className="w-3 h-3 mt-0.5 shrink-0" />
+                              <span>"{a.comment}"</span>
+                            </p>
+                          )}
+                        </div>
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          </>
+        )}
       </div>
     );
   }
@@ -726,11 +873,11 @@ export default function Admin() {
             <Users className="w-3 h-3" /> Member
           </div>
           <div className="col-span-2">Role</div>
-          <div className="col-span-3">Visible tabs</div>
+          <div className="col-span-2">Visible tabs</div>
           <div className="col-span-1 text-right">Done</div>
           <div className="col-span-1 text-right">Pend</div>
           <div className="col-span-1 text-right">Over</div>
-          <div className="col-span-1 text-right">Manage</div>
+          <div className="col-span-2 text-right">Manage</div>
         </div>
         {team.map((m) => {
           const perms = resolveTabPermissions(m.role, m.tab_permissions ?? null);
@@ -752,7 +899,7 @@ export default function Admin() {
                   <span className="ml-1 text-[9px] uppercase text-red-500">(inactive)</span>
                 )}
               </div>
-              <div className="col-span-3 self-center text-[10px] text-muted-foreground truncate" title={perms.map((p) => TAB_LABELS[p]).join(", ")}>
+              <div className="col-span-2 self-center text-[10px] text-muted-foreground truncate" title={perms.map((p) => TAB_LABELS[p]).join(", ")}>
                 {perms.length} tab{perms.length === 1 ? "" : "s"}
               </div>
               <div className="col-span-1 text-right self-center text-emerald-600 dark:text-emerald-400 inline-flex items-center justify-end gap-1">
@@ -766,13 +913,22 @@ export default function Admin() {
                 {m.overdue > 0 && <AlertTriangle className="w-3 h-3" />}
                 {m.overdue}
               </div>
-              <div className="col-span-1 text-right self-center">
-                <button
-                  onClick={() => setEditId(m.id)}
-                  className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-border bg-background hover:bg-secondary/40 text-[10px]"
-                >
-                  Edit <ChevronRight className="w-3 h-3" />
-                </button>
+              <div className="col-span-2 text-right self-center">
+                <div className="inline-flex items-center gap-1">
+                  <button
+                    onClick={() => setSelectedId(m.id)}
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-border bg-background hover:bg-secondary/40 text-[10px]"
+                    title="View attestation history"
+                  >
+                    <ClipboardList className="w-3 h-3" /> History
+                  </button>
+                  <button
+                    onClick={() => setEditId(m.id)}
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-border bg-background hover:bg-secondary/40 text-[10px]"
+                  >
+                    Edit <ChevronRight className="w-3 h-3" />
+                  </button>
+                </div>
               </div>
             </div>
           );
