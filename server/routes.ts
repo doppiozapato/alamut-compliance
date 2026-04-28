@@ -9,6 +9,7 @@ import {
   listSectionsForChapter,
   listObligations,
   updateObligation,
+  submitObligation,
   listAttestations,
   completeAttestation,
   listAttestationTemplates,
@@ -263,6 +264,35 @@ export async function registerRoutes(app: Express) {
     if (!updated) return res.status(404).json({ error: "Not found" });
     res.json(updated);
   });
+
+  // Mark a calendar obligation as submitted (or revert that decision) and
+  // capture an optional comment alongside who/when. Restricted to the same
+  // admin/compliance roles that can edit obligations.
+  app.post(
+    "/api/obligations/:id/submit",
+    requireRole("admin", "compliance"),
+    async (req, res) => {
+      const id = parseInt(String(req.params.id), 10);
+      if (!Number.isFinite(id)) return res.status(400).json({ error: "Invalid id" });
+      const requester = req.session.user!;
+      const body = (req.body || {}) as { submitted?: boolean; comment?: string | null };
+      const submitted = body.submitted !== false; // default true
+      const rawComment = body.comment;
+      const comment =
+        typeof rawComment === "string"
+          ? rawComment.trim().slice(0, 4000) || null
+          : rawComment === null
+            ? null
+            : null;
+      const updated = await submitObligation(id, {
+        submitted,
+        comment,
+        user: { id: requester.id, full_name: requester.full_name },
+      });
+      if (!updated) return res.status(404).json({ error: "Not found" });
+      res.json(updated);
+    },
+  );
 
   // ─── Attestations ─────────────────────────────────────────────────────────
 

@@ -213,15 +213,30 @@ export async function upsertChapter(c: Partial<ManualChapter> & { slug: string; 
 
 // ─── Obligations / calendar ──────────────────────────────────────────────────
 
+// Defaults for the submission columns added in 0004_obligation_submission.sql.
+// A Supabase row from a deployment that has not yet applied that migration
+// will not carry these keys, so always normalise to a stable shape.
+function normaliseObligation(o: any): ComplianceObligation {
+  return {
+    ...o,
+    submission_comment: o.submission_comment ?? null,
+    submitted_at: o.submitted_at ?? null,
+    submitted_by: o.submitted_by ?? null,
+    submitted_by_name: o.submitted_by_name ?? null,
+  } as ComplianceObligation;
+}
+
 export async function listObligations(): Promise<ComplianceObligation[]> {
   if (supabaseEnabled && supabase) {
     const { data } = await supabase
       .from("compliance_obligations")
       .select("*")
       .order("next_due");
-    return (data as ComplianceObligation[]) ?? [];
+    return ((data as any[]) ?? []).map(normaliseObligation);
   }
-  return [...memObligations].sort((a, b) => a.next_due.localeCompare(b.next_due));
+  return [...memObligations]
+    .sort((a, b) => a.next_due.localeCompare(b.next_due))
+    .map(normaliseObligation);
 }
 
 export async function updateObligation(id: number, patch: Partial<ComplianceObligation>): Promise<ComplianceObligation | null> {
@@ -233,12 +248,41 @@ export async function updateObligation(id: number, patch: Partial<ComplianceObli
       .select()
       .single();
     if (error) return null;
-    return data as ComplianceObligation;
+    return normaliseObligation(data);
   }
   const idx = memObligations.findIndex((o) => o.id === id);
   if (idx < 0) return null;
   memObligations[idx] = { ...memObligations[idx], ...patch, updated_at: new Date().toISOString() };
-  return memObligations[idx];
+  return normaliseObligation(memObligations[idx]);
+}
+
+// Marks an obligation as submitted (or reverts to in_progress) and captures
+// the actor + timestamp + comment so the calendar can show full provenance.
+export async function submitObligation(
+  id: number,
+  opts: {
+    submitted: boolean;
+    comment: string | null;
+    user: { id: number; full_name: string };
+  },
+): Promise<ComplianceObligation | null> {
+  const now = new Date().toISOString();
+  const patch: Partial<ComplianceObligation> = opts.submitted
+    ? {
+        status: "submitted",
+        submission_comment: opts.comment,
+        submitted_at: now,
+        submitted_by: opts.user.id,
+        submitted_by_name: opts.user.full_name,
+      }
+    : {
+        status: "in_progress",
+        submission_comment: opts.comment,
+        submitted_at: null,
+        submitted_by: null,
+        submitted_by_name: null,
+      };
+  return updateObligation(id, patch);
 }
 
 // ─── Attestations ────────────────────────────────────────────────────────────

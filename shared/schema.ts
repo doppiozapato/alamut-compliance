@@ -78,6 +78,10 @@ export interface ComplianceObligation {
   owner: string | null;
   status: "upcoming" | "in_progress" | "submitted" | "overdue";
   notes: string | null;
+  submission_comment: string | null;
+  submitted_at: string | null;
+  submitted_by: number | null;
+  submitted_by_name: string | null;
   created_at: string;
   updated_at: string;
 }

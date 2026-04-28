@@ -202,8 +202,17 @@ Notes:
    supabase/migrations/0001_init.sql
    supabase/migrations/0002_manual_sections.sql
    supabase/migrations/0003_regulatory_updates.sql
+   supabase/migrations/0004_obligation_submission.sql
    supabase/seed.sql
    ```
+   Migration `0004_obligation_submission.sql` adds `submission_comment`,
+   `submitted_at`, `submitted_by` and `submitted_by_name` to
+   `compliance_obligations` so the Compliance Calendar can record when each
+   reporting obligation was submitted, by whom, and any free-text notes.
+   Existing deployments must run this migration before admin/compliance
+   users can save submission comments — the API normalises missing columns
+   to `null` so reads keep working until the migration lands, but writes
+   require the columns to exist.
    Then push the parsed regulatory updates JSON into the new table:
    ```
    SUPABASE_SERVICE_ROLE_KEY=... npx tsx script/importRegulatoryUpdates.ts
