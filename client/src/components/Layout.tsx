@@ -13,6 +13,7 @@ import {
   Moon,
   Sun,
   Search,
+  Shield,
 } from "lucide-react";
 import { cn, ROLE_LABELS } from "@/lib/utils";
 import { logout, type CurrentUser } from "@/lib/auth";
@@ -21,6 +22,7 @@ import AlamutLogo from "./AlamutLogo";
 const NAV: { href: string; label: string; icon: any; roles?: string[] }[] = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/manual", label: "Compliance Manual", icon: BookOpen },
+  { href: "/policies", label: "Policies", icon: Shield },
   { href: "/fca", label: "FCA Handbook", icon: Library },
   { href: "/calendar", label: "Calendar", icon: CalendarDays },
   { href: "/regulatory-updates", label: "Regulatory Updates", icon: FileText },

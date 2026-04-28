@@ -5,7 +5,16 @@ Internal dashboard for Alamut covering:
 - **Firm Compliance Manual** — chapter-and-section viewer for the Alamut
   Compliance Manual (September 2025), parsed from the source PDF into 43
   chapters / appendices and ~300 sections, with fast search and FCA
-  cross-references.
+  cross-references. The chapter table-of-contents is rendered as a persistent
+  sidebar on the manual page so every chapter and appendix title is visible
+  and clickable by default — the dashboard never hides the chapter list
+  behind a non-obvious control.
+- **Policies** — separate tab that surfaces the firm's policies as a
+  curated library, grouped into categories (Conduct, Market Integrity,
+  Financial Crime, Governance, Operational Controls, Disclosure & Reporting,
+  Prudential, Fund/AIFM-specific). Each policy card links to the underlying
+  manual chapter or appendix so the manual remains the single source of
+  truth for policy text.
 - **FCA Handbook reference** — searchable index of all Handbook modules linking back to [handbook.fca.org.uk](https://handbook.fca.org.uk/handbook).
 - **Compliance Calendar** — firm and fund regulatory reporting obligations with status tracking.
 - **Regulatory Updates** — quarterly digest of FCA / FATF / market guidance with a

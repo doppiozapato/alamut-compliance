@@ -10,6 +10,7 @@ import Layout from "@/components/Layout";
 import Dashboard from "@/pages/Dashboard";
 import Manual from "@/pages/Manual";
 import ChapterView from "@/pages/ChapterView";
+import Policies from "@/pages/Policies";
 import FCAReference from "@/pages/FCAReference";
 import Calendar from "@/pages/Calendar";
 import RegulatoryUpdates from "@/pages/RegulatoryUpdates";
@@ -27,6 +28,7 @@ function AppRoutes({ user, onLogout }: { user: CurrentUser; onLogout: () => void
           <Route path="/manual/:slug">
             {(p) => <ChapterView slug={p.slug} />}
           </Route>
+          <Route path="/policies" component={Policies} />
           <Route path="/fca" component={FCAReference} />
           <Route path="/calendar" component={Calendar} />
           <Route path="/regulatory-updates" component={RegulatoryUpdates} />

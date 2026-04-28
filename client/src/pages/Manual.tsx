@@ -1,11 +1,11 @@
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { BookOpen, Search, FileText } from "lucide-react";
+import { BookOpen, Search, FileText, ChevronRight } from "lucide-react";
 import type { ManualChapter, ManualSourcePdf } from "@shared/schema";
 
 export default function Manual() {
-  const { data: chapters = [], isLoading } = useQuery<ManualChapter[]>({
+  const { data: chapters = [], isLoading, isError } = useQuery<ManualChapter[]>({
     queryKey: ["/api/manual/chapters"],
   });
   const { data: source } = useQuery<ManualSourcePdf>({
@@ -28,15 +28,23 @@ export default function Manual() {
 
   const main = filtered.filter((c) => c.kind !== "appendix");
   const appendices = filtered.filter((c) => c.kind === "appendix");
+  const allMain = chapters.filter((c) => c.kind !== "appendix");
+  const allAppendices = chapters.filter((c) => c.kind === "appendix");
 
   return (
-    <div className="px-6 py-6 max-w-5xl mx-auto">
-      <div className="flex items-center justify-between mb-2">
+    <div className="px-6 py-6 max-w-7xl mx-auto">
+      <div className="flex items-center justify-between mb-2 gap-4 flex-wrap">
         <div className="flex items-center gap-2">
           <BookOpen className="w-4 h-4" />
           <h1 className="text-base font-semibold">
             {source?.title ?? "Firm Compliance Manual"}
           </h1>
+          {chapters.length > 0 && (
+            <span className="text-[11px] text-muted-foreground">
+              · {allMain.length} chapters
+              {allAppendices.length > 0 ? ` · ${allAppendices.length} appendices` : ""}
+            </span>
+          )}
         </div>
         <div className="relative w-72">
           <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -50,29 +58,91 @@ export default function Manual() {
       </div>
       {source && (
         <p className="text-[11px] text-muted-foreground mb-5 flex items-center gap-1.5">
-          <FileText className="w-3 h-3" /> {source.version} · {source.page_count} pages ·
+          <FileText className="w-3 h-3" /> {source.version}
+          {source.page_count ? ` · ${source.page_count} pages` : ""} ·
           source: <span className="font-mono">{source.source_file}</span>
         </p>
       )}
 
       {isLoading ? (
-        <p className="text-xs text-muted-foreground">Loading…</p>
-      ) : filtered.length === 0 ? (
-        <p className="text-xs text-muted-foreground py-8 text-center">
-          No chapters match. Use the import script (
-          <span className="font-mono">script/parseManualPdf.py</span> →{" "}
-          <span className="font-mono">script/importManual.ts</span>) to ingest the firm manual.
+        <p className="text-xs text-muted-foreground py-8">Loading manual…</p>
+      ) : isError ? (
+        <p className="text-xs text-destructive py-8">
+          Failed to load chapters. Refresh, or sign in again if your session has expired.
+        </p>
+      ) : chapters.length === 0 ? (
+        <p className="text-xs text-muted-foreground py-8">
+          No chapters available yet. The compliance manual will appear here once it has been
+          imported.
         </p>
       ) : (
-        <>
-          <ChapterList items={main} heading="Chapters" />
-          {appendices.length > 0 && (
-            <div className="mt-8">
-              <ChapterList items={appendices} heading="Appendices" />
-            </div>
-          )}
-        </>
+        <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-6">
+          <TableOfContents main={allMain} appendices={allAppendices} />
+          <div>
+            {filtered.length === 0 ? (
+              <p className="text-xs text-muted-foreground py-8">
+                No chapters match your search.
+              </p>
+            ) : (
+              <>
+                <ChapterList items={main} heading="Chapters" />
+                {appendices.length > 0 && (
+                  <div className="mt-8">
+                    <ChapterList items={appendices} heading="Appendices" />
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
       )}
+    </div>
+  );
+}
+
+function TableOfContents({
+  main,
+  appendices,
+}: {
+  main: ManualChapter[];
+  appendices: ManualChapter[];
+}) {
+  return (
+    <aside className="self-start lg:sticky lg:top-4 bg-card border border-border rounded-lg overflow-hidden">
+      <div className="px-3 py-2 border-b border-border">
+        <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+          Table of contents
+        </p>
+      </div>
+      <nav className="max-h-[70vh] overflow-y-auto">
+        <TocSection title="Chapters" items={main} />
+        {appendices.length > 0 && <TocSection title="Appendices" items={appendices} />}
+      </nav>
+    </aside>
+  );
+}
+
+function TocSection({ title, items }: { title: string; items: ManualChapter[] }) {
+  if (items.length === 0) return null;
+  return (
+    <div>
+      <p className="px-3 pt-3 pb-1 text-[10px] uppercase tracking-wider text-muted-foreground/80">
+        {title}
+      </p>
+      <ul className="pb-2">
+        {items.map((c) => (
+          <li key={c.id}>
+            <Link href={`/manual/${c.slug}`}>
+              <a className="flex items-start gap-2 px-3 py-1.5 text-[12px] text-foreground/90 hover:bg-accent hover:text-accent-foreground border-l-2 border-transparent hover:border-primary transition-colors">
+                <span className="font-mono text-[10px] text-muted-foreground w-10 shrink-0 pt-0.5">
+                  {c.number}
+                </span>
+                <span className="leading-snug">{c.title}</span>
+              </a>
+            </Link>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -89,24 +159,22 @@ function ChapterList({ items, heading }: { items: ManualChapter[]; heading: stri
             <Link href={`/manual/${c.slug}`}>
               <a className="block bg-card border border-border rounded-lg px-4 py-3 hover:border-primary/40 transition-colors">
                 <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
                       {c.kind === "appendix" ? "Appendix" : "Chapter"} {c.number}
                       {c.start_page ? ` · pp. ${c.start_page}-${c.end_page}` : ""}
                       {c.version ? ` · ${c.version}` : ""}
                     </p>
-                    <p className="text-sm font-medium mt-0.5">{c.title}</p>
+                    <p className="text-sm font-semibold mt-0.5 text-primary hover:underline">
+                      {c.title}
+                    </p>
                     {c.summary && (
                       <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
                         {c.summary}
                       </p>
                     )}
                   </div>
-                  {c.owner && (
-                    <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0">
-                      Owner: {c.owner}
-                    </span>
-                  )}
+                  <ChevronRight className="w-4 h-4 text-muted-foreground/60 shrink-0 mt-0.5" />
                 </div>
                 {(c.fca_refs.length > 0 || c.tags.length > 0) && (
                   <div className="flex flex-wrap gap-1 mt-2">
@@ -127,6 +195,9 @@ function ChapterList({ items, heading }: { items: ManualChapter[]; heading: stri
                       </span>
                     ))}
                   </div>
+                )}
+                {c.owner && (
+                  <p className="text-[10px] text-muted-foreground mt-2">Owner: {c.owner}</p>
                 )}
               </a>
             </Link>
