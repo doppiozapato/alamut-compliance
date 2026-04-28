@@ -11,6 +11,7 @@ import {
   SEED_ATTESTATIONS,
   SEED_TEMPLATES,
   SEED_REGULATORY_UPDATES,
+  SEED_EXECUTED_POLICIES,
   SeedUser,
 } from "./seedData";
 import type {
@@ -22,6 +23,7 @@ import type {
   AttestationTemplate,
   RegulatoryUpdate,
   RegulatoryUpdateQuarter,
+  ExecutedPolicy,
 } from "../shared/schema";
 
 // In-memory mirrors used when Supabase is unavailable.
@@ -32,6 +34,7 @@ const memObligations: ComplianceObligation[] = [...SEED_OBLIGATIONS];
 const memAttestations: Attestation[] = [...SEED_ATTESTATIONS];
 const memTemplates: AttestationTemplate[] = [...SEED_TEMPLATES];
 const memRegulatoryUpdates: RegulatoryUpdate[] = [...SEED_REGULATORY_UPDATES];
+const memExecutedPolicies: ExecutedPolicy[] = [...SEED_EXECUTED_POLICIES];
 
 function nextId<T extends { id: number }>(rows: T[]): number {
   return rows.reduce((m, r) => Math.max(m, r.id), 0) + 1;
@@ -404,4 +407,60 @@ export async function listRegulatoryQuarters(): Promise<RegulatoryUpdateQuarter[
     if (a.year !== b.year) return b.year - a.year;
     return b.quarter.localeCompare(a.quarter);
   });
+}
+
+// ─── Executed Firm policies ──────────────────────────────────────────────────
+
+function normaliseExecutedPolicy(p: any): ExecutedPolicy {
+  return {
+    id: p.id,
+    slug: p.slug,
+    title: p.title,
+    category: p.category,
+    year: p.year,
+    version: p.version ?? null,
+    effective_date_label: p.effective_date_label ?? null,
+    effective_date: p.effective_date ?? null,
+    source_filename: p.source_filename ?? null,
+    page_count: p.page_count ?? 0,
+    summary: p.summary ?? null,
+    content: p.content ?? "",
+    review_status: p.review_status ?? "current",
+    imported_at: p.imported_at ?? new Date(0).toISOString(),
+    updated_at: p.updated_at ?? p.imported_at ?? new Date(0).toISOString(),
+  };
+}
+
+export async function listExecutedPolicies(): Promise<ExecutedPolicy[]> {
+  if (supabaseEnabled && supabase) {
+    const { data, error } = await supabase
+      .from("executed_policies")
+      .select(
+        "id, slug, title, category, year, version, effective_date, effective_date_label, source_filename, page_count, summary, review_status, imported_at, updated_at",
+      )
+      .order("title");
+    if (error) {
+      console.warn(`[store] executed_policies query failed: ${error.message}`);
+      return [];
+    }
+    return (data ?? []).map(normaliseExecutedPolicy).map((p) => ({ ...p, content: "" }));
+  }
+  return memExecutedPolicies
+    .map(normaliseExecutedPolicy)
+    .map((p) => ({ ...p, content: "" }))
+    .sort((a, b) => a.title.localeCompare(b.title));
+}
+
+export async function getExecutedPolicy(slug: string): Promise<ExecutedPolicy | null> {
+  if (supabaseEnabled && supabase) {
+    const { data } = await supabase
+      .from("executed_policies")
+      .select("*")
+      .eq("slug", slug)
+      .maybeSingle();
+    if (!data) return null;
+    return normaliseExecutedPolicy(data);
+  }
+  const found = memExecutedPolicies.find((p) => p.slug === slug);
+  return found ? normaliseExecutedPolicy(found) : null;
 }

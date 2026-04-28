@@ -1,27 +1,39 @@
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { Shield, Search, ChevronRight, BookOpen, AlertTriangle, LogIn } from "lucide-react";
-import type { ManualChapter } from "@shared/schema";
+import {
+  Shield,
+  Search,
+  ChevronRight,
+  BookOpen,
+  AlertTriangle,
+  LogIn,
+  FileText,
+  Calendar as CalendarIcon,
+  Layers,
+} from "lucide-react";
+import type { ManualChapter, ExecutedPolicy } from "@shared/schema";
 import { ApiError } from "@/lib/queryClient";
 import { logout } from "@/lib/auth";
 
-// Curated mapping of chapter/appendix slugs to a Policies "category". The
-// categories are derived structurally from the manual — no policy text is
-// invented here. Each entry points the user back at the underlying manual
-// chapter so the source-of-truth stays in one place.
-//
-// The matcher is permissive: any chapter whose title or slug contains the
-// keyword falls into that category. Slugs that match more than one keyword
-// land in the first matching category to keep the list deterministic.
-type PolicyCategory = {
+// Two distinct policy surfaces:
+//   1. "Manual" — categorised links into Compliance Manual chapters that
+//      describe the firm's policy *guidance*. Source of truth lives in the
+//      manual itself; clicking opens the chapter.
+//   2. "Executed" — operative signed/dated firm policies (PDF imports). These
+//      are standalone documents with a year, page count, and full extracted
+//      text accessible inline.
+
+type PolicyTab = "executed" | "manual";
+
+type ManualPolicyCategory = {
   key: string;
   label: string;
   description: string;
   matchers: RegExp[];
 };
 
-const CATEGORIES: PolicyCategory[] = [
+const MANUAL_CATEGORIES: ManualPolicyCategory[] = [
   {
     key: "conduct",
     label: "Conduct & Client Treatment",
@@ -131,39 +143,233 @@ const CATEGORIES: PolicyCategory[] = [
     label: "Fund & AIFM Specific",
     description:
       "AIFMD-specific obligations, EMIR, commodity derivatives and inducements (research).",
-    matchers: [
-      /aifm/i,
-      /emir/i,
-      /commodity[- ]derivatives/i,
-      /inducements/i,
-    ],
+    matchers: [/aifm/i, /emir/i, /commodity[- ]derivatives/i, /inducements/i],
   },
 ];
 
-const FALLBACK_CATEGORY: PolicyCategory = {
+const FALLBACK_CATEGORY: ManualPolicyCategory = {
   key: "other",
   label: "Other",
   description: "Other manual chapters and appendices.",
   matchers: [],
 };
 
-function categorise(c: ManualChapter): PolicyCategory {
+function categorise(c: ManualChapter): ManualPolicyCategory {
   const haystack = `${c.title} ${c.slug}`;
-  for (const cat of CATEGORIES) {
+  for (const cat of MANUAL_CATEGORIES) {
     if (cat.matchers.some((re) => re.test(haystack))) return cat;
   }
   return FALLBACK_CATEGORY;
 }
 
 interface CategoryGroup {
-  category: PolicyCategory;
+  category: ManualPolicyCategory;
   items: ManualChapter[];
 }
 
 export default function Policies() {
-  const { data: chapters = [], isLoading, isError, error, refetch, isFetching } = useQuery<ManualChapter[]>({
-    queryKey: ["/api/manual/chapters"],
-  });
+  const [tab, setTab] = useState<PolicyTab>("executed");
+
+  return (
+    <div className="px-6 py-6 max-w-7xl mx-auto">
+      <div className="flex items-center gap-2 mb-2">
+        <Shield className="w-4 h-4" />
+        <h1 className="text-base font-semibold">Policies</h1>
+      </div>
+      <p className="text-[11px] text-muted-foreground mb-4 flex items-center gap-1.5">
+        <BookOpen className="w-3 h-3" /> Operative firm policies and the supporting
+        Compliance Manual policy library.
+      </p>
+
+      <div className="flex gap-1 mb-5 border-b border-border">
+        <TabButton
+          active={tab === "executed"}
+          onClick={() => setTab("executed")}
+          icon={<FileText className="w-3.5 h-3.5" />}
+          label="Executed Firm Policies"
+        />
+        <TabButton
+          active={tab === "manual"}
+          onClick={() => setTab("manual")}
+          icon={<Layers className="w-3.5 h-3.5" />}
+          label="Compliance Manual Library"
+        />
+      </div>
+
+      {tab === "executed" ? <ExecutedPoliciesPanel /> : <ManualPoliciesPanel />}
+    </div>
+  );
+}
+
+function TabButton({
+  active,
+  onClick,
+  icon,
+  label,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={
+        "px-3 py-2 text-xs font-medium border-b-2 transition-colors flex items-center gap-1.5 " +
+        (active
+          ? "border-primary text-primary"
+          : "border-transparent text-muted-foreground hover:text-foreground")
+      }
+    >
+      {icon}
+      {label}
+    </button>
+  );
+}
+
+// ─── Executed Firm policies ──────────────────────────────────────────────────
+
+function ExecutedPoliciesPanel() {
+  const { data: policies = [], isLoading, isError, error, refetch, isFetching } =
+    useQuery<ExecutedPolicy[]>({ queryKey: ["/api/executed-policies"] });
+  const status = error instanceof ApiError ? error.status : null;
+  const isUnauthenticated = status === 401;
+  const [q, setQ] = useState("");
+  const [activeCat, setActiveCat] = useState<string | "all">("all");
+
+  const categories = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const p of policies) {
+      map.set(p.category, (map.get(p.category) ?? 0) + 1);
+    }
+    return Array.from(map.entries())
+      .map(([key, count]) => ({ key, count }))
+      .sort((a, b) => a.key.localeCompare(b.key));
+  }, [policies]);
+
+  const filtered = useMemo(() => {
+    const search = q.trim().toLowerCase();
+    return policies
+      .filter((p) => activeCat === "all" || p.category === activeCat)
+      .filter(
+        (p) =>
+          !search ||
+          p.title.toLowerCase().includes(search) ||
+          p.category.toLowerCase().includes(search) ||
+          (p.summary ?? "").toLowerCase().includes(search) ||
+          String(p.year).includes(search),
+      );
+  }, [policies, q, activeCat]);
+
+  if (isLoading) {
+    return <p className="text-xs text-muted-foreground py-8">Loading executed policies…</p>;
+  }
+  if (isUnauthenticated) {
+    return <SessionExpiredCard />;
+  }
+  if (isError) {
+    return <ErrorCard status={status} onRetry={refetch} retrying={isFetching} />;
+  }
+  if (policies.length === 0) {
+    return (
+      <p className="text-xs text-muted-foreground py-8">
+        No executed firm policies have been imported yet. Run{" "}
+        <code className="font-mono text-[10.5px]">script/parseExecutedPolicies.py</code>{" "}
+        and the Supabase importer to populate this list.
+      </p>
+    );
+  }
+
+  return (
+    <div>
+      <div className="flex items-start justify-between gap-4 flex-wrap mb-3">
+        <p className="text-[11px] text-muted-foreground">
+          Operative signed firm policies ({policies.length} document
+          {policies.length === 1 ? "" : "s"}). Click a card for the full text.
+        </p>
+        <div className="relative w-72">
+          <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search executed policies…"
+            className="w-full pl-8 pr-3 py-1.5 text-xs rounded-md border border-border bg-card focus:outline-none focus:ring-1 focus:ring-ring"
+          />
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-1.5 mb-4">
+        <Chip
+          label={`All · ${policies.length}`}
+          active={activeCat === "all"}
+          onClick={() => setActiveCat("all")}
+        />
+        {categories.map((c) => (
+          <Chip
+            key={c.key}
+            label={`${c.key} · ${c.count}`}
+            active={activeCat === c.key}
+            onClick={() => setActiveCat(c.key)}
+          />
+        ))}
+      </div>
+
+      {filtered.length === 0 ? (
+        <p className="text-xs text-muted-foreground py-6">
+          No executed policies match your search.
+        </p>
+      ) : (
+        <ul className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
+          {filtered.map((p) => (
+            <li key={p.id}>
+              <Link href={`/policies/executed/${p.slug}`}>
+                <a className="block bg-card border border-border rounded-lg px-3.5 py-3 hover:border-primary/40 transition-colors h-full">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                        {p.category}
+                      </p>
+                      <p className="text-[13px] font-semibold mt-0.5 text-primary leading-snug">
+                        {p.title}
+                      </p>
+                      {p.summary && (
+                        <p className="text-[11px] text-muted-foreground mt-1 line-clamp-3">
+                          {p.summary}
+                        </p>
+                      )}
+                    </div>
+                    <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/60 shrink-0 mt-0.5" />
+                  </div>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-[10px] text-muted-foreground">
+                    <span className="inline-flex items-center gap-1">
+                      <CalendarIcon className="w-3 h-3" />
+                      {p.effective_date_label ?? p.year}
+                    </span>
+                    <span>· {p.page_count} pages</span>
+                    {p.review_status && p.review_status !== "current" && (
+                      <span className="inline-flex items-center gap-1 text-amber-600">
+                        <AlertTriangle className="w-3 h-3" />
+                        {p.review_status.replace("_", " ")}
+                      </span>
+                    )}
+                  </div>
+                </a>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// ─── Manual-derived policy library ───────────────────────────────────────────
+
+function ManualPoliciesPanel() {
+  const { data: chapters = [], isLoading, isError, error, refetch, isFetching } =
+    useQuery<ManualChapter[]>({ queryKey: ["/api/manual/chapters"] });
   const status = error instanceof ApiError ? error.status : null;
   const isUnauthenticated = status === 401;
   const [q, setQ] = useState("");
@@ -171,7 +377,7 @@ export default function Policies() {
 
   const groups: CategoryGroup[] = useMemo(() => {
     const byKey = new Map<string, CategoryGroup>();
-    for (const cat of [...CATEGORIES, FALLBACK_CATEGORY]) {
+    for (const cat of [...MANUAL_CATEGORIES, FALLBACK_CATEGORY]) {
       byKey.set(cat.key, { category: cat, items: [] });
     }
     for (const c of chapters) {
@@ -203,16 +409,31 @@ export default function Policies() {
 
   const totalPolicies = groups.reduce((n, g) => n + g.items.length, 0);
 
+  if (isLoading) {
+    return <p className="text-xs text-muted-foreground py-8">Loading manual library…</p>;
+  }
+  if (isUnauthenticated) {
+    return <SessionExpiredCard />;
+  }
+  if (isError) {
+    return <ErrorCard status={status} onRetry={refetch} retrying={isFetching} />;
+  }
+  if (groups.length === 0) {
+    return (
+      <p className="text-xs text-muted-foreground py-8">
+        No policies available yet. They will appear here once the compliance manual has been
+        imported.
+      </p>
+    );
+  }
+
   return (
-    <div className="px-6 py-6 max-w-7xl mx-auto">
-      <div className="flex items-center justify-between mb-2 gap-4 flex-wrap">
-        <div className="flex items-center gap-2">
-          <Shield className="w-4 h-4" />
-          <h1 className="text-base font-semibold">Policies</h1>
-          {totalPolicies > 0 && (
-            <span className="text-[11px] text-muted-foreground">· {totalPolicies} policies</span>
-          )}
-        </div>
+    <div>
+      <div className="flex items-start justify-between gap-4 flex-wrap mb-3">
+        <p className="text-[11px] text-muted-foreground">
+          Categories derived from the Compliance Manual ({totalPolicies} chapters and
+          appendices). Click any card to open the underlying chapter.
+        </p>
         <div className="relative w-72">
           <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <input
@@ -223,111 +444,32 @@ export default function Policies() {
           />
         </div>
       </div>
-      <p className="text-[11px] text-muted-foreground mb-5 flex items-center gap-1.5">
-        <BookOpen className="w-3 h-3" /> Policy library derived from the firm's Compliance
-        Manual. Click any policy to open the full chapter.
-      </p>
 
-      {isLoading ? (
-        <p className="text-xs text-muted-foreground py-8">Loading policies…</p>
-      ) : isUnauthenticated ? (
-        <div className="py-10 max-w-md rounded-lg border border-amber-500/40 bg-amber-500/5 px-5 py-5">
-          <div className="flex items-start gap-2.5 mb-2">
-            <LogIn className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
-            <div>
-              <p className="text-sm font-semibold text-foreground">
-                Your session has expired
-              </p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Please sign in again to view the policy library.
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={async () => {
-              await logout();
-              window.location.hash = "";
-              window.location.reload();
-            }}
-            className="text-xs font-medium px-3 py-1.5 rounded-md bg-primary text-primary-foreground hover:opacity-90 transition-opacity mt-2"
-          >
-            Sign in again
-          </button>
-        </div>
-      ) : isError ? (
-        <div className="py-10 max-w-md rounded-lg border border-destructive/40 bg-destructive/5 px-5 py-5">
-          <div className="flex items-start gap-2.5 mb-2">
-            <AlertTriangle className="w-4 h-4 text-destructive mt-0.5 shrink-0" />
-            <div>
-              <p className="text-sm font-semibold text-foreground">
-                Couldn't load the policy library
-              </p>
-              <p className="text-xs text-muted-foreground mt-1">
-                The server returned an error while fetching chapters.
-              </p>
-              <p className="text-[10px] font-mono text-muted-foreground/80 mt-2 break-all">
-                {status ? `HTTP ${status}` : "network error"}
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            disabled={isFetching}
-            onClick={() => refetch()}
-            className="text-xs font-medium px-3 py-1.5 rounded-md bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50 transition-opacity mt-2"
-          >
-            {isFetching ? "Retrying…" : "Retry"}
-          </button>
-        </div>
-      ) : groups.length === 0 ? (
-        <p className="text-xs text-muted-foreground py-8">
-          No policies available yet. They will appear here once the compliance manual has been
-          imported.
-        </p>
-      ) : (
-        <>
-          <CategoryChips
-            groups={groups}
-            active={activeKey}
-            onSelect={(k) => setActiveKey(k)}
-          />
-
-          {filteredGroups.length === 0 ? (
-            <p className="text-xs text-muted-foreground py-8">No policies match your search.</p>
-          ) : (
-            <div className="space-y-8 mt-6">
-              {filteredGroups.map((g) => (
-                <CategoryBlock key={g.category.key} group={g} />
-              ))}
-            </div>
-          )}
-        </>
-      )}
-    </div>
-  );
-}
-
-function CategoryChips({
-  groups,
-  active,
-  onSelect,
-}: {
-  groups: CategoryGroup[];
-  active: string;
-  onSelect: (key: string | "all") => void;
-}) {
-  return (
-    <div className="flex flex-wrap gap-1.5 mt-3">
-      <Chip label={`All · ${groups.reduce((n, g) => n + g.items.length, 0)}`} active={active === "all"} onClick={() => onSelect("all")} />
-      {groups.map((g) => (
+      <div className="flex flex-wrap gap-1.5 mb-4">
         <Chip
-          key={g.category.key}
-          label={`${g.category.label} · ${g.items.length}`}
-          active={active === g.category.key}
-          onClick={() => onSelect(g.category.key)}
+          label={`All · ${totalPolicies}`}
+          active={activeKey === "all"}
+          onClick={() => setActiveKey("all")}
         />
-      ))}
+        {groups.map((g) => (
+          <Chip
+            key={g.category.key}
+            label={`${g.category.label} · ${g.items.length}`}
+            active={activeKey === g.category.key}
+            onClick={() => setActiveKey(g.category.key)}
+          />
+        ))}
+      </div>
+
+      {filteredGroups.length === 0 ? (
+        <p className="text-xs text-muted-foreground py-8">No policies match your search.</p>
+      ) : (
+        <div className="space-y-8 mt-2">
+          {filteredGroups.map((g) => (
+            <CategoryBlock key={g.category.key} group={g} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -402,5 +544,69 @@ function CategoryBlock({ group }: { group: CategoryGroup }) {
         ))}
       </ul>
     </section>
+  );
+}
+
+function SessionExpiredCard() {
+  return (
+    <div className="py-10 max-w-md rounded-lg border border-amber-500/40 bg-amber-500/5 px-5 py-5">
+      <div className="flex items-start gap-2.5 mb-2">
+        <LogIn className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
+        <div>
+          <p className="text-sm font-semibold text-foreground">Your session has expired</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            Please sign in again to view the policy library.
+          </p>
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={async () => {
+          await logout();
+          window.location.hash = "";
+          window.location.reload();
+        }}
+        className="text-xs font-medium px-3 py-1.5 rounded-md bg-primary text-primary-foreground hover:opacity-90 transition-opacity mt-2"
+      >
+        Sign in again
+      </button>
+    </div>
+  );
+}
+
+function ErrorCard({
+  status,
+  onRetry,
+  retrying,
+}: {
+  status: number | null;
+  onRetry: () => void;
+  retrying: boolean;
+}) {
+  return (
+    <div className="py-10 max-w-md rounded-lg border border-destructive/40 bg-destructive/5 px-5 py-5">
+      <div className="flex items-start gap-2.5 mb-2">
+        <AlertTriangle className="w-4 h-4 text-destructive mt-0.5 shrink-0" />
+        <div>
+          <p className="text-sm font-semibold text-foreground">
+            Couldn't load the policy library
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            The server returned an error while fetching the policy list.
+          </p>
+          <p className="text-[10px] font-mono text-muted-foreground/80 mt-2 break-all">
+            {status ? `HTTP ${status}` : "network error"}
+          </p>
+        </div>
+      </div>
+      <button
+        type="button"
+        disabled={retrying}
+        onClick={onRetry}
+        className="text-xs font-medium px-3 py-1.5 rounded-md bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50 transition-opacity mt-2"
+      >
+        {retrying ? "Retrying…" : "Retry"}
+      </button>
+    </div>
   );
 }

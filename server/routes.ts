@@ -15,6 +15,8 @@ import {
   listAttestationTemplates,
   listRegulatoryUpdates,
   listRegulatoryQuarters,
+  listExecutedPolicies,
+  getExecutedPolicy,
 } from "./store";
 import { supabaseEnabled } from "./supabase";
 import { FCA_MODULES, FCA_CATEGORIES } from "./fcaHandbook";
@@ -337,6 +339,18 @@ export async function registerRoutes(app: Express) {
     if (year && /^\d+$/.test(year)) opts.year = parseInt(year, 10);
     if (section === "regulatory" || section === "enforcement") opts.section = section;
     res.json(await listRegulatoryUpdates(opts));
+  });
+
+  // ─── Executed Firm policies ───────────────────────────────────────────────
+
+  app.get("/api/executed-policies", requireAuth, async (_req, res) => {
+    res.json(await listExecutedPolicies());
+  });
+
+  app.get("/api/executed-policies/:slug", requireAuth, async (req, res) => {
+    const policy = await getExecutedPolicy(String(req.params.slug));
+    if (!policy) return res.status(404).json({ error: "Policy not found" });
+    res.json(policy);
   });
 
   // ─── Admin: team overview ─────────────────────────────────────────────────

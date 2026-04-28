@@ -142,6 +142,32 @@ export interface RegulatoryUpdateQuarter {
   source_document: string | null;
 }
 
+// ─── Executed Firm policies ─────────────────────────────────────────────────
+// Distinct from `ManualChapter` — these are standalone signed/executed firm
+// policy documents (e.g. AML Policy 2025, Order Execution Policy 2025) sourced
+// from PDFs uploaded to the policy library. The Compliance Manual is the
+// source of policy *guidance*; these documents are the operative versions.
+
+export interface ExecutedPolicy {
+  id: number;
+  slug: string;
+  title: string;
+  category: string;
+  year: number;
+  version: string | null;
+  effective_date_label: string | null;
+  effective_date: string | null;
+  source_filename: string | null;
+  page_count: number;
+  summary: string | null;
+  // Full extracted text. Omitted from list responses to keep payloads small;
+  // populated on the detail endpoint.
+  content?: string;
+  review_status?: "current" | "under_review" | "archived" | null;
+  imported_at: string;
+  updated_at: string;
+}
+
 export interface DashboardStats {
   totalChapters: number;
   upcomingObligations: number;

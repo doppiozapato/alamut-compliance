@@ -9,12 +9,15 @@ Internal dashboard for Alamut covering:
   sidebar on the manual page so every chapter and appendix title is visible
   and clickable by default — the dashboard never hides the chapter list
   behind a non-obvious control.
-- **Policies** — separate tab that surfaces the firm's policies as a
-  curated library, grouped into categories (Conduct, Market Integrity,
-  Financial Crime, Governance, Operational Controls, Disclosure & Reporting,
-  Prudential, Fund/AIFM-specific). Each policy card links to the underlying
-  manual chapter or appendix so the manual remains the single source of
-  truth for policy text.
+- **Policies** — separate tab segregated into two panels:
+  - **Executed Firm Policies** — operative signed/dated policy documents
+    imported from PDF (AML 2025, Conflicts of Interest 2025, Order Execution
+    2025, etc.). Each card shows category, year, page count, summary; the
+    detail view renders the full extracted text and source filename.
+  - **Compliance Manual Library** — curated category view (Conduct, Market
+    Integrity, Financial Crime, Governance, Operational Controls, Disclosure
+    & Reporting, Prudential, Fund/AIFM-specific) with each card linking to
+    the underlying manual chapter or appendix.
 - **FCA Handbook reference** — searchable index of all Handbook modules linking back to [handbook.fca.org.uk](https://handbook.fca.org.uk/handbook).
 - **Compliance Calendar** — firm and fund regulatory reporting obligations with status tracking.
 - **Regulatory Updates** — quarterly digest of FCA / FATF / market guidance with a
@@ -318,6 +321,52 @@ re-runs so commits stay clean.
 The Supabase importer upserts on `(year, quarter, section, date_published, title)`,
 so re-running the script after a manual edit to the JSON is safe.
 
+### Importing executed Firm policies (PDF)
+
+The "Executed Firm Policies" panel under `/policies` is driven by parsed
+JSON at `script/executedPoliciesData.json`. Source PDFs are **not** committed
+to the repo (they are confidential, signed firm policies); only the
+extracted JSON metadata + text is checked in. To refresh or add policies:
+
+```bash
+# 1. Drop the signed policy PDFs into a private working directory outside
+#    the repo (e.g. ../executed_policies_import/). One PDF per policy.
+ls ../executed_policies_import/
+#   Alamut-AML-Policy.pdf
+#   Alamut-Order-Execution-Policy-4.pdf
+#   ...
+
+# 2. Parse them into a single JSON. Defaults to the directory above and
+#    writes to script/executedPoliciesData.json.
+python3 script/parseExecutedPolicies.py
+# or:
+python3 script/parseExecutedPolicies.py /path/to/private/policy_dir \
+    script/executedPoliciesData.json
+
+# 3. Commit the JSON so the in-memory fallback and Railway deploy serve the
+#    new set immediately. The build copies the JSON next to the bundle.
+git add script/executedPoliciesData.json
+git commit -m "Update executed firm policies"
+
+# 4. Rebuild and (optionally) push to Supabase.
+npm run build
+SUPABASE_SERVICE_ROLE_KEY=... npx tsx script/importExecutedPolicies.ts
+```
+
+To register a brand-new policy filename, add a metadata entry to
+`FILE_META` in `script/parseExecutedPolicies.py` (title, category, year,
+effective date label) — the parser will auto-detect the PDF, strip the
+`PRIVATE & CONFIDENTIAL` / page-number / footer chrome, and reflow each
+paragraph. Page count is read from `pdfinfo` output.
+
+The Supabase importer upserts on the policy `slug`, so re-running it after
+a JSON edit is safe.
+
+If you later want to serve the original PDF for download, store the file
+in a private Supabase Storage bucket (e.g. `executed-policies/`) and add a
+signed-URL endpoint — the schema already records `source_filename` so a UI
+download link can be wired up without another migration.
+
 ## Railway deployment
 
 The repo ships ready-to-deploy on [railway.com](https://railway.com): pushing
@@ -507,6 +556,8 @@ alamut-compliance/
 │           ├── Dashboard.tsx
 │           ├── Manual.tsx
 │           ├── ChapterView.tsx
+│           ├── Policies.tsx              # tabbed: Executed + Manual
+│           ├── ExecutedPolicyView.tsx    # full text of one executed policy
 │           ├── FCAReference.tsx
 │           ├── Calendar.tsx
 │           ├── Attestations.tsx
@@ -522,7 +573,12 @@ alamut-compliance/
 │   └── vite.ts
 ├── shared/schema.ts           # types shared client+server
 ├── supabase/
-│   ├── migrations/0001_init.sql
+│   ├── migrations/
+│   │   ├── 0001_init.sql
+│   │   ├── 0002_manual_sections.sql
+│   │   ├── 0003_regulatory_updates.sql
+│   │   ├── 0004_obligation_submission.sql
+│   │   └── 0005_executed_policies.sql
 │   └── seed.sql
 ├── script/
 │   ├── build.ts               # esbuild + vite build
@@ -531,7 +587,10 @@ alamut-compliance/
 │   ├── importManual.ts        # JSON / markdown → manual_chapters + manual_sections
 │   ├── parseRegulatoryUpdatesDocx.py  # DOCX → script/regulatoryUpdates/<Q>-<YYYY>.json
 │   ├── regulatoryUpdates/     # one JSON per quarter (Q1-2026.json committed)
-│   └── importRegulatoryUpdates.ts     # JSON → regulatory_updates (Supabase)
+│   ├── importRegulatoryUpdates.ts     # JSON → regulatory_updates (Supabase)
+│   ├── parseExecutedPolicies.py       # Executed firm PDFs → executedPoliciesData.json
+│   ├── executedPoliciesData.json      # parsed executed firm policies (committed)
+│   └── importExecutedPolicies.ts      # JSON → executed_policies (Supabase)
 ├── railway.json
 ├── tailwind.config.ts
 ├── tsconfig.json

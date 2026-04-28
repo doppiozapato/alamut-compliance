@@ -14,9 +14,11 @@ import type {
   Attestation,
   AttestationTemplate,
   RegulatoryUpdate,
+  ExecutedPolicy,
 } from "../shared/schema";
 import { buildSeedChaptersFromPdf, MANUAL_SOURCE } from "./manualSeed";
 import { buildSeedRegulatoryUpdates } from "./regulatoryUpdatesSeed";
+import { buildSeedExecutedPolicies } from "./executedPoliciesSeed";
 
 // ─── Team members / credentials ──────────────────────────────────────────────
 //
@@ -647,3 +649,8 @@ export const SEED_ATTESTATIONS: Attestation[] = buildSeedAttestations();
 // change required.
 
 export const SEED_REGULATORY_UPDATES: RegulatoryUpdate[] = buildSeedRegulatoryUpdates();
+
+// Executed Firm policies — operative signed/dated policy documents loaded from
+// PDFs under `executed_policies_import/` (private) and parsed via
+// `script/parseExecutedPolicies.py`.
+export const SEED_EXECUTED_POLICIES: ExecutedPolicy[] = buildSeedExecutedPolicies();

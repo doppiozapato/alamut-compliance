@@ -53,6 +53,23 @@ async function buildAll() {
     console.warn("script/manualData.json not found; production bundle will use fallback chapters.");
   }
 
+  // Copy parsed executed Firm policies JSON so executedPoliciesSeed.ts can
+  // resolve it at runtime in production deployments.
+  try {
+    await access("script/executedPoliciesData.json");
+    await copyFile(
+      "script/executedPoliciesData.json",
+      "dist/executedPoliciesData.json",
+    );
+    console.log(
+      "copied script/executedPoliciesData.json -> dist/executedPoliciesData.json",
+    );
+  } catch {
+    console.warn(
+      "script/executedPoliciesData.json not found; Executed Policies tab will be empty.",
+    );
+  }
+
   // Copy quarterly regulatory updates JSON files so regulatoryUpdatesSeed.ts
   // can resolve them at runtime in production deployments.
   try {
