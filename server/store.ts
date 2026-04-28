@@ -25,6 +25,7 @@ import type {
   RegulatoryUpdateQuarter,
   ExecutedPolicy,
 } from "../shared/schema";
+import { nextDueAfter } from "../shared/schema";
 
 // In-memory mirrors used when Supabase is unavailable.
 const memUsers: SeedUser[] = [...SEED_USERS];
@@ -259,8 +260,14 @@ export async function updateObligation(id: number, patch: Partial<ComplianceObli
   return normaliseObligation(memObligations[idx]);
 }
 
-// Marks an obligation as submitted (or reverts to in_progress) and captures
-// the actor + timestamp + comment so the calendar can show full provenance.
+// Records a submission against an obligation. When `submitted` is true the
+// last-submission metadata (who/when/comment) is captured and the calendar
+// rolls `next_due` forward by one period of the obligation's frequency, so
+// the next upcoming filing stays visible. `ad_hoc` obligations don't have
+// a natural recurrence so we keep the existing `next_due` and mark them
+// as submitted. When `submitted` is false the action acts as an "undo" —
+// last-submission metadata is cleared but `next_due` is intentionally not
+// rewound (we have no way of knowing the prior cycle's date once advanced).
 export async function submitObligation(
   id: number,
   opts: {
@@ -270,22 +277,30 @@ export async function submitObligation(
   },
 ): Promise<ComplianceObligation | null> {
   const now = new Date().toISOString();
-  const patch: Partial<ComplianceObligation> = opts.submitted
-    ? {
-        status: "submitted",
-        submission_comment: opts.comment,
-        submitted_at: now,
-        submitted_by: opts.user.id,
-        submitted_by_name: opts.user.full_name,
-      }
-    : {
-        status: "in_progress",
-        submission_comment: opts.comment,
-        submitted_at: null,
-        submitted_by: null,
-        submitted_by_name: null,
-      };
-  return updateObligation(id, patch);
+  if (!opts.submitted) {
+    return updateObligation(id, {
+      status: "in_progress",
+      submission_comment: opts.comment,
+      submitted_at: null,
+      submitted_by: null,
+      submitted_by_name: null,
+    });
+  }
+  // Need the current row to know the frequency + current next_due.
+  const current = (await listObligations()).find((o) => o.id === id);
+  if (!current) return null;
+  const advanced = nextDueAfter(current.next_due, current.frequency);
+  const isAdHoc = current.frequency === "ad_hoc";
+  return updateObligation(id, {
+    // Ad-hoc has no recurrence, so leave it flagged as submitted; recurring
+    // obligations roll over to `upcoming` for the next period.
+    status: isAdHoc ? "submitted" : "upcoming",
+    submission_comment: opts.comment,
+    submitted_at: now,
+    submitted_by: opts.user.id,
+    submitted_by_name: opts.user.full_name,
+    next_due: advanced,
+  });
 }
 
 // ─── Attestations ────────────────────────────────────────────────────────────

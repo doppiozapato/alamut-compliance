@@ -19,7 +19,15 @@ Internal dashboard for Alamut covering:
     & Reporting, Prudential, Fund/AIFM-specific) with each card linking to
     the underlying manual chapter or appendix.
 - **FCA Handbook reference** — searchable index of all Handbook modules linking back to [handbook.fca.org.uk](https://handbook.fca.org.uk/handbook).
-- **Compliance Calendar** — firm and fund regulatory reporting obligations with status tracking.
+- **Compliance Calendar** — firm and fund regulatory reporting obligations
+  with status tracking. Each card always shows the **Next due** date in the
+  top-right and an explicit **Submitted** / **Record submitted** action
+  button. Recording a submission captures the actor, timestamp, and an
+  optional comment, then automatically rolls `next_due` forward by one
+  cycle of the obligation's frequency (monthly / quarterly / semi-annual /
+  annual) so the upcoming filing stays visible — submitted and upcoming
+  states coexist on the same row. Ad-hoc obligations have no recurrence
+  and stay flagged as submitted until edited.
 - **Regulatory Updates** — quarterly digest of FCA / FATF / market guidance with a
   per-quarter dropdown selector, parsed from the firm's quarterly DOCX bulletin.
 - **Attestations** — per-team-member sign-offs (Code of Conduct, PA Dealing, AML, etc).
@@ -215,7 +223,10 @@ Notes:
    Existing deployments must run this migration before admin/compliance
    users can save submission comments — the API normalises missing columns
    to `null` so reads keep working until the migration lands, but writes
-   require the columns to exist.
+   require the columns to exist. No further schema changes are required
+   for the next-due roll-forward behaviour: the server reuses the existing
+   `next_due` and `frequency` columns and advances `next_due` in place
+   each time a submission is recorded.
    Then push the parsed regulatory updates JSON into the new table:
    ```
    SUPABASE_SERVICE_ROLE_KEY=... npx tsx script/importRegulatoryUpdates.ts

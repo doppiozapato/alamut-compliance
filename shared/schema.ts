@@ -73,17 +73,56 @@ export interface ComplianceObligation {
   scope: "firm" | "fund" | "both";
   category: string; // e.g. "Regulatory Reporting", "AML", "MiFID"
   frequency: "annual" | "semi_annual" | "quarterly" | "monthly" | "ad_hoc";
-  next_due: string; // ISO date
+  next_due: string; // ISO date — date of the next upcoming filing
   fca_refs: string[];
   owner: string | null;
   status: "upcoming" | "in_progress" | "submitted" | "overdue";
   notes: string | null;
+  // Last-submission metadata. After a submission is recorded these capture
+  // the most recent filing (date/comment/actor) while `next_due` is rolled
+  // forward to the next period — so the calendar always shows the next due
+  // date, not the just-completed one.
   submission_comment: string | null;
   submitted_at: string | null;
   submitted_by: number | null;
   submitted_by_name: string | null;
   created_at: string;
   updated_at: string;
+}
+
+// Roll a YYYY-MM-DD date forward by one cycle of the obligation's
+// frequency. `ad_hoc` obligations have no recurrence so the original
+// due date is returned unchanged. Exported so client and server agree
+// on the same arithmetic.
+export function nextDueAfter(
+  dueDate: string,
+  frequency: ComplianceObligation["frequency"],
+): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dueDate);
+  if (!m) return dueDate;
+  const year = parseInt(m[1], 10);
+  const month = parseInt(m[2], 10) - 1; // 0-based
+  const day = parseInt(m[3], 10);
+  const monthsToAdd: Record<ComplianceObligation["frequency"], number> = {
+    monthly: 1,
+    quarterly: 3,
+    semi_annual: 6,
+    annual: 12,
+    ad_hoc: 0,
+  };
+  const add = monthsToAdd[frequency] ?? 0;
+  if (add === 0) return dueDate;
+  // Use UTC arithmetic so timezones don't shift the day.
+  const target = new Date(Date.UTC(year, month + add, 1));
+  // Clamp `day` to the last day of the target month (e.g. Jan 31 + 1m = Feb 28/29).
+  const lastDay = new Date(
+    Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0),
+  ).getUTCDate();
+  const dom = Math.min(day, lastDay);
+  const yyyy = target.getUTCFullYear().toString().padStart(4, "0");
+  const mm = (target.getUTCMonth() + 1).toString().padStart(2, "0");
+  const dd = dom.toString().padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
 }
 
 export interface Attestation {
