@@ -110,6 +110,12 @@ export default function Layout({ user, children, onLogout }: Props) {
             <LogOut className="w-3.5 h-3.5" />
             Sign out
           </button>
+          <p
+            className="mt-2 px-2 text-[9px] font-mono text-sidebar-foreground/30 leading-tight"
+            title={`Built ${__BUILD_TIME__}`}
+          >
+            build {__BUILD_COMMIT__}
+          </p>
         </div>
       </aside>
 

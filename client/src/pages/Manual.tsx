@@ -1,20 +1,35 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { BookOpen, Search, FileText, ChevronRight } from "lucide-react";
+import { BookOpen, Search, FileText, ChevronRight, AlertTriangle, Inbox, LogIn } from "lucide-react";
 import type { ManualChapter, ManualSourcePdf } from "@shared/schema";
 import { logout } from "@/lib/auth";
+import { ApiError } from "@/lib/queryClient";
 
 export default function Manual() {
-  const { data: chapters = [], isLoading, isError, error } = useQuery<ManualChapter[]>({
+  const { data: chapters = [], isLoading, isError, error, refetch, isFetching } = useQuery<ManualChapter[]>({
     queryKey: ["/api/manual/chapters"],
   });
-  const isUnauthenticated =
-    error instanceof Error && error.message === "UNAUTHENTICATED";
+  const status = error instanceof ApiError ? error.status : null;
+  const isUnauthenticated = status === 401;
   const { data: source } = useQuery<ManualSourcePdf>({
     queryKey: ["/api/manual/source"],
   });
   const [q, setQ] = useState("");
+
+  // When the session has expired we want the user to land on Login
+  // automatically — App.tsx's session-expired listener already handles this,
+  // but we kick a small delay-fallback redirect in case the listener has
+  // been bypassed (e.g. very old cached client bundle).
+  useEffect(() => {
+    if (!isUnauthenticated) return;
+    const t = window.setTimeout(() => {
+      // wouter uses hash routing; clear the hash and reload to drop into Login
+      window.location.hash = "";
+      window.location.reload();
+    }, 4000);
+    return () => window.clearTimeout(t);
+  }, [isUnauthenticated]);
 
   const filtered = useMemo(() => {
     if (!q.trim()) return chapters;
@@ -70,45 +85,89 @@ export default function Manual() {
       {isLoading ? (
         <p className="text-xs text-muted-foreground py-8">Loading manual…</p>
       ) : isUnauthenticated ? (
-        <div className="py-8 max-w-md">
-          <p className="text-xs text-foreground mb-1">Your session has expired.</p>
-          <p className="text-xs text-muted-foreground mb-3">
-            Please sign in again to view the Compliance Manual.
-          </p>
-          <button
-            type="button"
-            onClick={async () => {
-              // Calling logout() clears the server cookie and the in-memory
-              // user — App.tsx's session-expired listener will already have
-              // taken us back to the Login screen, but this guarantees a
-              // clean slate even when that listener is bypassed.
-              await logout();
-              window.location.reload();
-            }}
-            className="text-xs font-medium px-3 py-1.5 rounded-md bg-primary text-primary-foreground hover:opacity-90 transition-opacity"
-          >
-            Sign in again
-          </button>
+        <div className="py-10 max-w-md rounded-lg border border-amber-500/40 bg-amber-500/5 px-5 py-5">
+          <div className="flex items-start gap-2.5 mb-2">
+            <LogIn className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
+            <div>
+              <p className="text-sm font-semibold text-foreground">
+                Your session has expired
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                For your security we signed you out after a period of inactivity.
+                Sign in again to view the Compliance Manual. You'll be redirected
+                automatically in a few seconds.
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-2 mt-3">
+            <button
+              type="button"
+              onClick={async () => {
+                await logout();
+                window.location.hash = "";
+                window.location.reload();
+              }}
+              className="text-xs font-medium px-3 py-1.5 rounded-md bg-primary text-primary-foreground hover:opacity-90 transition-opacity"
+            >
+              Sign in again
+            </button>
+          </div>
         </div>
       ) : isError ? (
-        <div className="py-8 max-w-md">
-          <p className="text-xs text-destructive mb-2">
-            Failed to load chapters. Please refresh, or sign in again if your session
-            has expired.
-          </p>
-          <button
-            type="button"
-            onClick={() => window.location.reload()}
-            className="text-xs font-medium px-3 py-1.5 rounded-md border border-border hover:bg-accent transition-colors"
-          >
-            Refresh
-          </button>
+        <div className="py-10 max-w-md rounded-lg border border-destructive/40 bg-destructive/5 px-5 py-5">
+          <div className="flex items-start gap-2.5 mb-2">
+            <AlertTriangle className="w-4 h-4 text-destructive mt-0.5 shrink-0" />
+            <div>
+              <p className="text-sm font-semibold text-foreground">
+                Couldn't load the Compliance Manual
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                The server returned an error while fetching the chapter list. This
+                usually means a transient backend issue — your session is still
+                valid.
+              </p>
+              <p className="text-[10px] font-mono text-muted-foreground/80 mt-2 break-all">
+                {status ? `HTTP ${status}` : "network error"}
+                {error instanceof Error && error.message && status !== 0
+                  ? ` · ${error.message}`
+                  : ""}
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-2 mt-3">
+            <button
+              type="button"
+              disabled={isFetching}
+              onClick={() => refetch()}
+              className="text-xs font-medium px-3 py-1.5 rounded-md bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50 transition-opacity"
+            >
+              {isFetching ? "Retrying…" : "Retry"}
+            </button>
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="text-xs font-medium px-3 py-1.5 rounded-md border border-border hover:bg-accent transition-colors"
+            >
+              Hard refresh
+            </button>
+          </div>
         </div>
       ) : chapters.length === 0 ? (
-        <p className="text-xs text-muted-foreground py-8">
-          No chapters available yet. The compliance manual will appear here once it has been
-          imported.
-        </p>
+        <div className="py-10 max-w-md rounded-lg border border-border bg-card px-5 py-5">
+          <div className="flex items-start gap-2.5">
+            <Inbox className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
+            <div>
+              <p className="text-sm font-semibold text-foreground">
+                No manual chapters found
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                The Compliance Manual hasn't been imported yet. An admin needs to
+                run the manual import script (or seed Supabase with chapters)
+                before this page will populate.
+              </p>
+            </div>
+          </div>
+        </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-6">
           <TableOfContents main={allMain} appendices={allAppendices} />

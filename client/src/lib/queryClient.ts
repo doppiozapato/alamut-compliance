@@ -14,6 +14,17 @@ function notifySessionExpired() {
   }
 }
 
+// Custom error so callers (Manual.tsx etc.) can branch on HTTP status —
+// 401 (session expired) needs a different UI than 500/network failure.
+export class ApiError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
 export async function apiRequest(
   method: string,
   path: string,
@@ -36,12 +47,28 @@ export async function apiRequest(
 
 async function defaultQueryFn({ queryKey }: { queryKey: readonly unknown[] }) {
   const path = queryKey[0] as string;
-  const res = await fetch(`${API_BASE}${path}`, { credentials: "include" });
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`, { credentials: "include" });
+  } catch (e) {
+    // Network failure (DNS, offline, CORS preflight). Surface as status 0
+    // so the UI can distinguish from a server-side error.
+    throw new ApiError((e as Error).message || "Network error", 0);
+  }
   if (res.status === 401) {
     notifySessionExpired();
-    throw new Error("UNAUTHENTICATED");
+    throw new ApiError("UNAUTHENTICATED", 401);
   }
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  if (!res.ok) {
+    let detail = `${res.status} ${res.statusText}`;
+    try {
+      const j = await res.json();
+      if (j?.error) detail = `${res.status} ${j.error}`;
+    } catch {
+      /* body was not JSON; keep the status line */
+    }
+    throw new ApiError(detail, res.status);
+  }
   return res.json();
 }
 
@@ -53,7 +80,7 @@ export const queryClient = new QueryClient({
       // Don't retry an UNAUTHENTICATED response — retrying just delays the
       // session-expired prompt without any chance of success.
       retry: (failureCount, error) => {
-        if (error instanceof Error && error.message === "UNAUTHENTICATED") return false;
+        if (error instanceof ApiError && error.status === 401) return false;
         return failureCount < 1;
       },
     },

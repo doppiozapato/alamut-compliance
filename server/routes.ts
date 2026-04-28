@@ -60,14 +60,27 @@ function normaliseLoginEmail(input: string): string {
 
 export async function registerRoutes(app: Express) {
   // ─── Health ───────────────────────────────────────────────────────────────
-  // Unauthenticated liveness probe used by Railway's healthcheck.
+  // Unauthenticated liveness probe used by Railway's healthcheck. Exposes
+  // the build commit/time so we can confirm in the browser whether a
+  // redeploy actually shipped a new bundle.
+  const BUILD_COMMIT =
+    process.env.RAILWAY_GIT_COMMIT_SHA ||
+    process.env.GIT_COMMIT ||
+    process.env.SOURCE_VERSION ||
+    "unknown";
+  const BUILD_TIME = process.env.BUILD_TIME || new Date().toISOString();
   app.get("/api/health", (_req, res) => {
     res.status(200).json({
       status: "ok",
       service: "alamut-compliance",
       uptime: process.uptime(),
       timestamp: new Date().toISOString(),
+      build: { commit: BUILD_COMMIT, time: BUILD_TIME },
     });
+  });
+
+  app.get("/api/version", (_req, res) => {
+    res.status(200).json({ commit: BUILD_COMMIT, time: BUILD_TIME });
   });
 
   // ─── Auth ─────────────────────────────────────────────────────────────────

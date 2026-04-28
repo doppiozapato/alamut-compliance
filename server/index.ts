@@ -10,6 +10,14 @@ import { createServer } from "node:http";
 const app = express();
 const httpServer = createServer(app);
 
+// Railway terminates TLS at its edge proxy and forwards plain HTTP to the
+// container with X-Forwarded-Proto: https. Without trust proxy enabled,
+// express-session sees req.secure === false and refuses to set the
+// `secure` cookie — meaning the browser never receives the session
+// cookie at all, every API call comes back 401, and the Manual page
+// (and every other authed page) appears broken right after login.
+app.set("trust proxy", 1);
+
 declare module "http" {
   interface IncomingMessage {
     rawBody: unknown;

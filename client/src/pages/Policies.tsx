@@ -1,8 +1,10 @@
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { Shield, Search, ChevronRight, BookOpen } from "lucide-react";
+import { Shield, Search, ChevronRight, BookOpen, AlertTriangle, LogIn } from "lucide-react";
 import type { ManualChapter } from "@shared/schema";
+import { ApiError } from "@/lib/queryClient";
+import { logout } from "@/lib/auth";
 
 // Curated mapping of chapter/appendix slugs to a Policies "category". The
 // categories are derived structurally from the manual — no policy text is
@@ -159,9 +161,11 @@ interface CategoryGroup {
 }
 
 export default function Policies() {
-  const { data: chapters = [], isLoading, isError } = useQuery<ManualChapter[]>({
+  const { data: chapters = [], isLoading, isError, error, refetch, isFetching } = useQuery<ManualChapter[]>({
     queryKey: ["/api/manual/chapters"],
   });
+  const status = error instanceof ApiError ? error.status : null;
+  const isUnauthenticated = status === 401;
   const [q, setQ] = useState("");
   const [activeKey, setActiveKey] = useState<string | "all">("all");
 
@@ -226,10 +230,56 @@ export default function Policies() {
 
       {isLoading ? (
         <p className="text-xs text-muted-foreground py-8">Loading policies…</p>
+      ) : isUnauthenticated ? (
+        <div className="py-10 max-w-md rounded-lg border border-amber-500/40 bg-amber-500/5 px-5 py-5">
+          <div className="flex items-start gap-2.5 mb-2">
+            <LogIn className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
+            <div>
+              <p className="text-sm font-semibold text-foreground">
+                Your session has expired
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Please sign in again to view the policy library.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={async () => {
+              await logout();
+              window.location.hash = "";
+              window.location.reload();
+            }}
+            className="text-xs font-medium px-3 py-1.5 rounded-md bg-primary text-primary-foreground hover:opacity-90 transition-opacity mt-2"
+          >
+            Sign in again
+          </button>
+        </div>
       ) : isError ? (
-        <p className="text-xs text-destructive py-8">
-          Failed to load policies. Refresh, or sign in again if your session has expired.
-        </p>
+        <div className="py-10 max-w-md rounded-lg border border-destructive/40 bg-destructive/5 px-5 py-5">
+          <div className="flex items-start gap-2.5 mb-2">
+            <AlertTriangle className="w-4 h-4 text-destructive mt-0.5 shrink-0" />
+            <div>
+              <p className="text-sm font-semibold text-foreground">
+                Couldn't load the policy library
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                The server returned an error while fetching chapters.
+              </p>
+              <p className="text-[10px] font-mono text-muted-foreground/80 mt-2 break-all">
+                {status ? `HTTP ${status}` : "network error"}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            disabled={isFetching}
+            onClick={() => refetch()}
+            className="text-xs font-medium px-3 py-1.5 rounded-md bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50 transition-opacity mt-2"
+          >
+            {isFetching ? "Retrying…" : "Retry"}
+          </button>
+        </div>
       ) : groups.length === 0 ? (
         <p className="text-xs text-muted-foreground py-8">
           No policies available yet. They will appear here once the compliance manual has been
